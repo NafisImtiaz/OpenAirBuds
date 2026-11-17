@@ -1,0 +1,25 @@
+*.iml
+.gradle/
+/local.properties
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Build outputs
+*.apk
+*.apkm
+*.aab
+
+# Reverse engineering and large vendor assets (>100MB exceeds GitHub limits)
+realme LINK/
+*.dex
+
+# Caches and logs
+.kotlin/
+__pycache__/
+*.pyc
+*.log

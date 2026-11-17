@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Earbud Stem -->
+    <path
+        android:fillColor="#FF262626"
+        android:pathData="M56,52 L64,52 C66.2,52 68,53.8 68,56 L68,98 C68,101.3 65.3,104 62,104 L58,104 C54.7,104 52,101.3 52,98 L52,56 C52,53.8 53.8,52 56,52 Z" />
+    <!-- Stem accent line -->
+    <path
+        android:fillColor="#FF38EF7D"
+        android:pathData="M59,96 L61,96 C61.6,96 62,96.4 62,97 L62,99 C62,99.6 61.6,100 61,100 L59,100 C58.4,100 58,99.6 58,99 L58,97 C58,96.4 58.4,96 59,96 Z" />
+    <!-- Earbud Head Body -->
+    <path
+        android:fillColor="#FF2E2E2E"
+        android:pathData="M60,20 C73.3,20 84,30.7 84,44 C84,54.5 77.3,63.4 68,66.6 L68,56 C68,53.8 66.2,52 64,52 L56,52 C53.8,52 52,53.8 52,56 L52,66.6 C42.7,63.4 36,54.5 36,44 C36,30.7 46.7,20 60,20 Z" />
+    <!-- In-ear nozzle / silicone tip -->
+    <path
+        android:fillColor="#FF1F1F1F"
+        android:pathData="M38,36 C34,36 30,39 30,44 C30,49 34,52 38,52 Z" />
+    <!-- Microphone acoustic mesh grille -->
+    <path
+        android:fillColor="#FF4A4A4A"
+        android:pathData="M58,26 L62,26 C63.1,26 64,26.9 64,28 L64,28 C64,29.1 63.1,30 62,30 L58,30 C56.9,30 56,29.1 56,28 L56,28 C56,26.9 56.9,26 58,26 Z" />
+</vector>
