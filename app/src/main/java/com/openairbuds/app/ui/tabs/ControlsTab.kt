@@ -1,11 +1,18 @@
 package com.openairbuds.app.ui.tabs
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
@@ -57,8 +65,8 @@ import com.openairbuds.app.ui.components.KenkashiBadge
 import com.openairbuds.app.ui.components.KenkashiDivider
 import com.openairbuds.app.ui.components.KenkashiSegmentedBar
 import com.openairbuds.app.ui.components.KenkashiSwitch
-
 import com.openairbuds.app.ui.theme.AppThemeMode
+import com.openairbuds.app.ui.theme.KenkashiMotion
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,37 +141,68 @@ fun ControlsTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(170.dp)
-                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape),
+                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
+                .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
-            val isDarkTheme = currentTheme == AppThemeMode.KENKASHI_DARK || currentTheme == AppThemeMode.NOTHING_DARK
-            val drawableRes = when {
-                selectedEarbudTab == 0 && isDarkTheme -> R.drawable.ic_kenkashi_bud_left_dark
-                selectedEarbudTab == 0 -> R.drawable.ic_kenkashi_bud_left
-                isDarkTheme -> R.drawable.ic_kenkashi_bud_right_dark
-                else -> R.drawable.ic_kenkashi_bud_right
+            val systemDark = isSystemInDarkTheme()
+            val isDarkTheme = currentTheme.isDark(systemDark)
+
+            AnimatedContent(
+                targetState = selectedEarbudTab,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        (slideInHorizontally(animationSpec = KenkashiMotion.mechanicalTween()) { width -> width / 2 } +
+                                fadeIn(animationSpec = KenkashiMotion.mechanicalTween()))
+                            .togetherWith(
+                                slideOutHorizontally(animationSpec = KenkashiMotion.mechanicalTween()) { width -> -width / 2 } +
+                                        fadeOut(animationSpec = KenkashiMotion.mechanicalTween())
+                            )
+                    } else {
+                        (slideInHorizontally(animationSpec = KenkashiMotion.mechanicalTween()) { width -> -width / 2 } +
+                                fadeIn(animationSpec = KenkashiMotion.mechanicalTween()))
+                            .togetherWith(
+                                slideOutHorizontally(animationSpec = KenkashiMotion.mechanicalTween()) { width -> width / 2 } +
+                                        fadeOut(animationSpec = KenkashiMotion.mechanicalTween())
+                            )
+                    }
+                },
+                label = "EarbudShowcaseSlide",
+                modifier = Modifier.fillMaxSize()
+            ) { targetTab ->
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val drawableRes = when {
+                        targetTab == 0 && isDarkTheme -> R.drawable.ic_kenkashi_bud_left_dark
+                        targetTab == 0 -> R.drawable.ic_kenkashi_bud_left
+                        isDarkTheme -> R.drawable.ic_kenkashi_bud_right_dark
+                        else -> R.drawable.ic_kenkashi_bud_right
+                    }
+
+                    Image(
+                        painter = painterResource(id = drawableRes),
+                        contentDescription = if (targetTab == 0) "Left Earbud" else "Right Earbud",
+                        modifier = Modifier
+                            .size(130.dp)
+                            .padding(8.dp),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    // Small watermark label in the corner
+                    Text(
+                        text = if (targetTab == 0) "L" else "R",
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(12.dp)
+                    )
+                }
             }
-
-            Image(
-                painter = painterResource(id = drawableRes),
-                contentDescription = if (selectedEarbudTab == 0) "Left Earbud" else "Right Earbud",
-                modifier = Modifier
-                    .size(130.dp)
-                    .padding(8.dp),
-                contentScale = ContentScale.Fit
-            )
-
-            // Small watermark label in the corner
-            Text(
-                text = if (selectedEarbudTab == 0) "L" else "R",
-                fontFamily = FontFamily.Serif,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(12.dp)
-            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -323,9 +362,10 @@ fun ControlsTab(
     }
 
     // Modal Bottom Sheet for Gesture Action Selection (Kenkashi Minimalist Style)
-    if (selectedGestureForEdit != null) {
+    val gestureToEdit = selectedGestureForEdit
+    if (gestureToEdit != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val target = selectedGestureForEdit!!
+        val target = gestureToEdit
         val actionName = when (target.action) {
             1.toByte() -> "Single Tap"
             2.toByte() -> "Double Tap"

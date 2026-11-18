@@ -48,6 +48,8 @@ import com.openairbuds.app.model.BudsState
 import com.openairbuds.app.model.EqPreset
 import com.openairbuds.app.ui.components.CustomEqSheet
 import com.openairbuds.app.ui.components.KenkashiDivider
+import com.openairbuds.app.ui.components.KenkashiEqFrequencyVisualizer
+import com.openairbuds.app.ui.theme.KenkashiMotion
 
 private data class EqPresetDisplayItem(
     val preset: EqPreset,
@@ -175,6 +177,19 @@ fun EqualizerScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
             KenkashiDivider()
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Live Morphing Acoustic Frequency Visualizer
+            val activeCurveGains = if (state.eqPreset == EqPreset.CUSTOM) {
+                state.customEqGains
+            } else {
+                KenkashiMotion.getPresetCurveGains(state.eqPreset.displayName)
+            }
+            KenkashiEqFrequencyVisualizer(
+                gains = activeCurveGains,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Spacer(modifier = Modifier.height(20.dp))
 
             // Section 1 Header: Sound effects

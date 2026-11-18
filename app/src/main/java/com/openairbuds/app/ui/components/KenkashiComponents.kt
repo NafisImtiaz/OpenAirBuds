@@ -2,13 +2,18 @@ package com.openairbuds.app.ui.components
 
 import android.bluetooth.BluetoothDevice
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -48,16 +53,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -70,10 +84,12 @@ import com.openairbuds.app.model.EqPresetOption
 import com.openairbuds.app.ui.theme.AppThemeMode
 import com.openairbuds.app.ui.theme.KenkashiBlack
 import com.openairbuds.app.ui.theme.KenkashiHairline
+import com.openairbuds.app.ui.theme.KenkashiMotion
 import com.openairbuds.app.ui.theme.KenkashiPaperBg
 import com.openairbuds.app.ui.theme.KenkashiTextPrimary
 import com.openairbuds.app.ui.theme.KenkashiTextSecondary
 import com.openairbuds.app.ui.theme.KenkashiWhite
+import com.openairbuds.app.ui.theme.kenkashiPressable
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
@@ -92,6 +108,7 @@ fun KenkashiSwitch(
     inactiveColor: Color = MaterialTheme.colorScheme.outline
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val haptic = LocalHapticFeedback.current
     val trackWidth = 44.dp
     val trackHeight = 22.dp
     val thumbSize = 14.dp
@@ -100,6 +117,7 @@ fun KenkashiSwitch(
     val maxOffset = trackWidth - thumbSize - (padding * 2)
     val thumbOffsetFraction by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
+        animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationFast),
         label = "KenkashiSwitchThumb"
     )
     val thumbOffset = maxOffset * thumbOffsetFraction
@@ -120,6 +138,9 @@ fun KenkashiSwitch(
                 indication = null,
                 enabled = enabled
             ) {
+                runCatching {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
                 onCheckedChange?.invoke(!checked)
             }
             .padding(padding),
@@ -127,7 +148,7 @@ fun KenkashiSwitch(
     ) {
         Box(
             modifier = Modifier
-                .offset(x = thumbOffset)
+                .offset { IntOffset(thumbOffset.roundToPx(), 0) }
                 .size(thumbSize)
                 .then(
                     if (checked) {
@@ -143,7 +164,7 @@ fun KenkashiSwitch(
 /**
  * 2. KENKASHI SEGMENTED BAR
  * Hairline grid with N equal segments:
- * Selected item is solid filled with high contrast inverted text.
+ * Features a mechanical sliding solid rectangular indicator block and haptic ticks.
  */
 @Composable
 fun KenkashiSegmentedBar(
@@ -156,41 +177,84 @@ fun KenkashiSegmentedBar(
     activeText: Color = MaterialTheme.colorScheme.onPrimary,
     inactiveText: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
-    Row(
+    val haptic = LocalHapticFeedback.current
+    val count = options.size.coerceAtLeast(1)
+
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
-            .border(BorderStroke(1.dp, borderColor), RectangleShape),
-        verticalAlignment = Alignment.CenterVertically
+            .border(BorderStroke(1.dp, borderColor), RectangleShape)
     ) {
-        options.forEachIndexed { index, title ->
-            val isSelected = selectedIndex == index
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(if (isSelected) activeBg else Color.Transparent)
-                    .clickable { onSelectIndex(index) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = title.uppercase(),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    letterSpacing = 1.sp,
-                    color = if (isSelected) activeText else inactiveText,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
-                )
-            }
+        val segmentWidth = maxWidth / count
+        val targetX = segmentWidth * selectedIndex.coerceIn(0, count - 1)
+        val animatedX by animateDpAsState(
+            targetValue = targetX,
+            animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationFast),
+            label = "SegmentHighlightSlide"
+        )
 
-            if (index < options.size - 1) {
-                VerticalDivider(
-                    thickness = 1.dp,
-                    color = borderColor,
-                    modifier = Modifier.fillMaxHeight()
+        // 1. Sliding mechanical active highlight block
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(animatedX.roundToPx(), 0) }
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .background(activeBg, RectangleShape)
+        )
+
+        // 2. Hairline grid dividers
+        Row(modifier = Modifier.fillMaxSize()) {
+            options.forEachIndexed { index, _ ->
+                Spacer(modifier = Modifier.weight(1f))
+                if (index < options.size - 1) {
+                    VerticalDivider(
+                        thickness = 1.dp,
+                        color = borderColor,
+                        modifier = Modifier.fillMaxHeight()
+                    )
+                }
+            }
+        }
+
+        // 3. Labels and touch targets
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            options.forEachIndexed { index, title ->
+                val isSelected = selectedIndex == index
+                val animatedTextColor by animateColorAsState(
+                    targetValue = if (isSelected) activeText else inactiveText,
+                    animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationFast),
+                    label = "SegmentTextColor"
                 )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable {
+                            if (!isSelected) {
+                                runCatching {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            }
+                            onSelectIndex(index)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = title.uppercase(),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        letterSpacing = 1.sp,
+                        color = animatedTextColor,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -311,7 +375,7 @@ fun KenkashiActionRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
+            .kenkashiPressable(enabled = enabled, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -349,19 +413,21 @@ fun KenkashiActionRow(
 
 /**
  * 7. KENKASHI FLAT HORIZONTAL THEME TOGGLE
- * Ultra-minimalist 2-option selector:
- * [ PAPER LIGHT | CHARCOAL DARK ]
+ * Ultra-minimalist 3-option selector:
+ * [ PAPER LIGHT | CHARCOAL DARK | AUTO ]
  */
 @Composable
 fun KenkashiThemeToggle(
-    isDark: Boolean,
-    onSelectTheme: (Boolean) -> Unit,
+    currentTheme: AppThemeMode,
+    onSelectTheme: (AppThemeMode) -> Unit,
     modifier: Modifier = Modifier,
     borderColor: Color = MaterialTheme.colorScheme.outline,
     activeBg: Color = MaterialTheme.colorScheme.primary,
     activeText: Color = MaterialTheme.colorScheme.onPrimary,
     inactiveText: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
+    val systemInDark = isSystemInDarkTheme()
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -370,32 +436,35 @@ fun KenkashiThemeToggle(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Option 1: Paper Light
+        val isPaperActive = currentTheme == AppThemeMode.KENKASHI_PAPER
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .background(if (!isDark) activeBg else Color.Transparent)
-                .clickable { onSelectTheme(false) },
+                .background(if (isPaperActive) activeBg else Color.Transparent)
+                .clickable { onSelectTheme(AppThemeMode.KENKASHI_PAPER) },
             contentAlignment = Alignment.Center
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .background(Color(0xFFF9F8F5), RectangleShape)
-                        .border(BorderStroke(1.dp, if (!isDark) Color(0xFF111111) else borderColor), RectangleShape)
+                        .border(BorderStroke(1.dp, if (isPaperActive) Color(0xFF111111) else borderColor), RectangleShape)
                 )
                 Text(
                     text = "PAPER LIGHT",
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
-                    fontWeight = if (!isDark) FontWeight.Bold else FontWeight.Medium,
-                    letterSpacing = 1.sp,
-                    color = if (!isDark) activeText else inactiveText,
-                    maxLines = 1
+                    fontWeight = if (isPaperActive) FontWeight.Bold else FontWeight.Medium,
+                    letterSpacing = 0.5.sp,
+                    color = if (isPaperActive) activeText else inactiveText,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -407,36 +476,123 @@ fun KenkashiThemeToggle(
         )
 
         // Option 2: Charcoal Dark
+        val isDarkActive = currentTheme == AppThemeMode.KENKASHI_DARK
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .background(if (isDark) activeBg else Color.Transparent)
-                .clickable { onSelectTheme(true) },
+                .background(if (isDarkActive) activeBg else Color.Transparent)
+                .clickable { onSelectTheme(AppThemeMode.KENKASHI_DARK) },
             contentAlignment = Alignment.Center
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .background(Color(0xFF121212), RectangleShape)
-                        .border(BorderStroke(1.dp, if (isDark) Color(0xFFF9F8F5) else borderColor), RectangleShape)
+                        .border(BorderStroke(1.dp, if (isDarkActive) Color(0xFFF9F8F5) else borderColor), RectangleShape)
                 )
                 Text(
                     text = "CHARCOAL DARK",
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
-                    fontWeight = if (isDark) FontWeight.Bold else FontWeight.Medium,
-                    letterSpacing = 1.sp,
-                    color = if (isDark) activeText else inactiveText,
-                    maxLines = 1
+                    fontWeight = if (isDarkActive) FontWeight.Bold else FontWeight.Medium,
+                    letterSpacing = 0.5.sp,
+                    color = if (isDarkActive) activeText else inactiveText,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        VerticalDivider(
+            thickness = 1.dp,
+            color = borderColor,
+            modifier = Modifier.fillMaxHeight()
+        )
+
+        // Option 3: Auto (Follows System Light / Dark)
+        val isAutoActive = currentTheme == AppThemeMode.AUTO
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .background(if (isAutoActive) activeBg else Color.Transparent)
+                .clickable { onSelectTheme(AppThemeMode.AUTO) },
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Split 8dp swatch: Left half Light, Right half Dark
+                Row(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .border(
+                            BorderStroke(
+                                1.dp,
+                                if (isAutoActive) (if (systemInDark) Color(0xFF111111) else Color(0xFFF9F8F5)) else borderColor
+                            ),
+                            RectangleShape
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color(0xFFF9F8F5))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color(0xFF121212))
+                    )
+                }
+                Text(
+                    text = "AUTO",
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = if (isAutoActive) FontWeight.Bold else FontWeight.Medium,
+                    letterSpacing = 0.5.sp,
+                    color = if (isAutoActive) activeText else inactiveText,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
     }
+}
+
+/**
+ * Backward-compatible 2-option KenkashiThemeToggle overload.
+ */
+@Composable
+fun KenkashiThemeToggle(
+    isDark: Boolean,
+    onSelectTheme: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    borderColor: Color = MaterialTheme.colorScheme.outline,
+    activeBg: Color = MaterialTheme.colorScheme.primary,
+    activeText: Color = MaterialTheme.colorScheme.onPrimary,
+    inactiveText: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    val currentTheme = if (isDark) AppThemeMode.KENKASHI_DARK else AppThemeMode.KENKASHI_PAPER
+    KenkashiThemeToggle(
+        currentTheme = currentTheme,
+        onSelectTheme = { selected -> onSelectTheme(selected == AppThemeMode.KENKASHI_DARK) },
+        modifier = modifier,
+        borderColor = borderColor,
+        activeBg = activeBg,
+        activeText = activeText,
+        inactiveText = inactiveText
+    )
 }
 
 /**
@@ -666,7 +822,7 @@ fun KenkashiDynamicBassSheet(
                     .height(44.dp)
                     .background(MaterialTheme.colorScheme.primary, RectangleShape)
                     .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                    .clickable(onClick = onDismiss),
+                    .kenkashiPressable(onClick = onDismiss),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -826,7 +982,7 @@ fun KenkashiEqualizerSheet(
                     .fillMaxWidth()
                     .height(44.dp)
                     .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                    .clickable(onClick = onDismiss),
+                    .kenkashiPressable(onClick = onDismiss),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -1071,7 +1227,8 @@ fun KenkashiFitTestSheet(
         }
     }
 
-    val isDark = currentTheme == AppThemeMode.KENKASHI_DARK
+    val systemDark = isSystemInDarkTheme()
+    val isDark = currentTheme.isDark(systemDark)
     val leftBudRes = if (isDark) R.drawable.ic_kenkashi_bud_left_dark else R.drawable.ic_kenkashi_bud_left
     val rightBudRes = if (isDark) R.drawable.ic_kenkashi_bud_right_dark else R.drawable.ic_kenkashi_bud_right
 
@@ -1216,7 +1373,7 @@ fun KenkashiFitTestSheet(
                             .fillMaxWidth()
                             .height(44.dp)
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .clickable {
+                            .kenkashiPressable {
                                 hasStarted = false
                                 onStopTest()
                             },
@@ -1286,7 +1443,7 @@ fun KenkashiFitTestSheet(
                                 .height(44.dp)
                                 .background(MaterialTheme.colorScheme.primary, RectangleShape)
                                 .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                                .clickable {
+                                .kenkashiPressable {
                                     timedOut = false
                                     hasStarted = true
                                     onStartTest()
@@ -1381,7 +1538,7 @@ fun KenkashiFitTestSheet(
                             .height(44.dp)
                             .background(MaterialTheme.colorScheme.primary, RectangleShape)
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .clickable {
+                            .kenkashiPressable {
                                 timedOut = false
                                 hasStarted = true
                                 onStartTest()
@@ -1417,7 +1574,7 @@ fun KenkashiFitTestSheet(
                             .height(46.dp)
                             .background(MaterialTheme.colorScheme.primary, RectangleShape)
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .clickable {
+                            .kenkashiPressable {
                                 timedOut = false
                                 hasStarted = true
                                 onStartTest()
@@ -1434,6 +1591,170 @@ fun KenkashiFitTestSheet(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 14. KENKASHI ACOUSTIC FREQUENCY RESPONSE CURVE VISUALIZER
+ * Live morphing 6-band studio acoustic curve with 1px hairline gridlines,
+ * Monospace frequency and decibel markers, and smooth spline interpolation.
+ */
+@Composable
+fun KenkashiEqFrequencyVisualizer(
+    gains: List<Int>,
+    modifier: Modifier = Modifier,
+    minGain: Float = -6f,
+    maxGain: Float = 6f
+) {
+    val bandCount = 6
+    val currentGains = if (gains.size == bandCount) gains else List(bandCount) { 0 }
+
+    // Smooth mechanical animation for each of the 6 band gains (deferred to draw phase)
+    val g0 = animateFloatAsState(targetValue = currentGains[0].toFloat(), animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationMedium), label = "EqBand_0")
+    val g1 = animateFloatAsState(targetValue = currentGains[1].toFloat(), animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationMedium), label = "EqBand_1")
+    val g2 = animateFloatAsState(targetValue = currentGains[2].toFloat(), animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationMedium), label = "EqBand_2")
+    val g3 = animateFloatAsState(targetValue = currentGains[3].toFloat(), animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationMedium), label = "EqBand_3")
+    val g4 = animateFloatAsState(targetValue = currentGains[4].toFloat(), animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationMedium), label = "EqBand_4")
+    val g5 = animateFloatAsState(targetValue = currentGains[5].toFloat(), animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationMedium), label = "EqBand_5")
+
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val axisColor = MaterialTheme.colorScheme.outline
+    val curveColor = MaterialTheme.colorScheme.primary
+    val freqLabels = remember { listOf("62Hz", "250Hz", "1kHz", "4kHz", "8kHz", "16kHz") }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
+            .padding(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "ACOUSTIC RESPONSE",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "6-BAND LIVE SPLINE",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                letterSpacing = 0.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(110.dp)
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+
+                // 1. Gridlines: +6dB (top 10%), 0dB (50%), -6dB (bottom 90%)
+                val topY = h * 0.10f
+                val midY = h * 0.50f
+                val botY = h * 0.90f
+
+                drawLine(color = gridColor, start = Offset(0f, topY), end = Offset(w, topY), strokeWidth = 1.dp.toPx())
+                drawLine(color = axisColor, start = Offset(0f, midY), end = Offset(w, midY), strokeWidth = 1.dp.toPx())
+                drawLine(color = gridColor, start = Offset(0f, botY), end = Offset(w, botY), strokeWidth = 1.dp.toPx())
+
+                // 2. Band points calculation
+                val bandPadding = w * 0.08f
+                val usableWidth = w - (bandPadding * 2)
+                val stepX = usableWidth / (bandCount - 1)
+
+                val animatedGains = listOf(g0.value, g1.value, g2.value, g3.value, g4.value, g5.value)
+                val points = animatedGains.mapIndexed { index, gain ->
+                    val px = bandPadding + (index * stepX)
+                    val normalizedY = KenkashiMotion.gainToNormalizedY(gain, minGain, maxGain)
+                    val py = topY + (normalizedY * (botY - topY))
+                    Offset(px, py)
+                }
+
+                // Draw vertical hairline guides at each band
+                points.forEach { pt ->
+                    drawLine(color = gridColor.copy(alpha = 0.25f), start = Offset(pt.x, topY), end = Offset(pt.x, botY), strokeWidth = 1.dp.toPx())
+                }
+
+                // 3. Smooth Cubic Spline Path
+                val path = Path()
+                path.moveTo(0f, points.first().y)
+                path.lineTo(points.first().x, points.first().y)
+
+                for (i in 0 until points.size - 1) {
+                    val p0 = if (i > 0) points[i - 1] else points[i]
+                    val p1 = points[i]
+                    val p2 = points[i + 1]
+                    val p3 = if (i + 2 < points.size) points[i + 2] else p2
+
+                    val cp1x = p1.x + (p2.x - p0.x) / 6f
+                    val cp1y = p1.y + (p2.y - p0.y) / 6f
+                    val cp2x = p2.x - (p3.x - p1.x) / 6f
+                    val cp2y = p2.y - (p3.y - p1.y) / 6f
+
+                    path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+                }
+                path.lineTo(w, points.last().y)
+
+                // Fill area under curve
+                val fillPath = Path().apply {
+                    addPath(path)
+                    lineTo(w, botY)
+                    lineTo(0f, botY)
+                    close()
+                }
+                drawPath(
+                    path = fillPath,
+                    color = curveColor.copy(alpha = 0.08f)
+                )
+
+                // Stroke curve line
+                drawPath(
+                    path = path,
+                    color = curveColor,
+                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                )
+
+                // Draw sharp 4x4dp square anchors at each band
+                val squareSize = 6.dp.toPx()
+                points.forEach { pt ->
+                    drawRect(
+                        color = curveColor,
+                        topLeft = Offset(pt.x - squareSize / 2f, pt.y - squareSize / 2f),
+                        size = androidx.compose.ui.geometry.Size(squareSize, squareSize)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Frequency labels along the bottom
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            freqLabels.forEach { label ->
+                Text(
+                    text = label,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

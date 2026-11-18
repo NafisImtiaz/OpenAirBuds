@@ -265,6 +265,12 @@ class BudsViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setOnboardingCompleted(completed: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setOnboardingCompleted(completed)
+        }
+    }
+
     fun setPreferredAncLevel(level: AncLevel) {
         viewModelScope.launch {
             preferencesRepository.savePreferredAncLevel(level)

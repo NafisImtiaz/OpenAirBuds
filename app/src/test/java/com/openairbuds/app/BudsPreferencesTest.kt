@@ -56,6 +56,18 @@ class BudsPreferencesTest {
         assertTrue("Default auto-connect should be true", prefs.autoConnectEnabled)
         assertFalse("Default BassWave enabled should be false", prefs.isBassWaveEnabled)
         assertEquals("Default BassWave level should be 0", 0, prefs.bassWaveLevel)
+        assertFalse("Default onboarding completed should be false", prefs.isOnboardingCompleted)
+    }
+
+    @Test
+    fun testOnboardingPreference() = runTest(testDispatcher) {
+        assertFalse(repository.preferencesFlow.first().isOnboardingCompleted)
+
+        repository.setOnboardingCompleted(true)
+        assertTrue(repository.preferencesFlow.first().isOnboardingCompleted)
+
+        repository.setOnboardingCompleted(false)
+        assertFalse(repository.preferencesFlow.first().isOnboardingCompleted)
     }
 
     @Test

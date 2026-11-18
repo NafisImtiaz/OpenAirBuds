@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,6 +69,7 @@ fun SettingsTab(
     onToggleAutoAnswerCalls: (Boolean) -> Unit = {},
     onToggleFindPhone: (Boolean) -> Unit = {},
     onTogglePhoneRing: () -> Unit = {},
+    onOpenSetupScreen: () -> Unit = {},
     onRelease: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -91,88 +93,44 @@ fun SettingsTab(
                 .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
                 .padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = state.deviceName ?: state.deviceProfile.displayName,
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Small Case Line-Art Illustration
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
-                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .padding(6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val caseThumbRes = if (currentTheme == AppThemeMode.KENKASHI_DARK) {
-                            R.drawable.ic_kenkashi_case_dark
-                        } else {
-                            R.drawable.ic_kenkashi_case
-                        }
-                        Image(
-                            painter = painterResource(id = caseThumbRes),
-                            contentDescription = "Device Case",
-                            modifier = Modifier.size(38.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = state.deviceName ?: state.deviceProfile.displayName,
-                            fontFamily = FontFamily.Serif,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(
-                                        if (isConnected) Color(0xFF22C55E) else MaterialTheme.colorScheme.outline,
-                                        shape = RectangleShape
-                                    )
+                            .size(6.dp)
+                            .background(
+                                if (isConnected) Color(0xFF22C55E) else MaterialTheme.colorScheme.outline,
+                                shape = RectangleShape
                             )
-                            Text(
-                                text = if (isConnected) "CONNECTED" else "DISCONNECTED",
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp,
-                                letterSpacing = 1.sp,
-                                color = if (isConnected) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    )
+                    Text(
+                        text = if (isConnected) "CONNECTED" else "DISCONNECTED",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.sp,
+                        color = if (isConnected) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-
-                KenkashiBadge(text = if (isConnected) "ONLINE" else "OFFLINE")
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 2. ACOUSTIC LOGIC SECTION
+        // 2. DEVICE SETTINGS SECTION
         Column(modifier = Modifier.fillMaxWidth()) {
             KenkashiDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Acoustic Logic",
-                fontFamily = FontFamily.Serif,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Game Mode
             KenkashiSettingRow(
@@ -249,13 +207,9 @@ fun SettingsTab(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val isDark = currentTheme == AppThemeMode.KENKASHI_DARK
             KenkashiThemeToggle(
-                isDark = isDark,
-                onSelectTheme = { darkSelected ->
-                    val chosen = if (darkSelected) AppThemeMode.KENKASHI_DARK else AppThemeMode.KENKASHI_PAPER
-                    onSelectTheme(chosen)
-                }
+                currentTheme = currentTheme,
+                onSelectTheme = onSelectTheme
             )
         }
 
@@ -282,6 +236,13 @@ fun SettingsTab(
                 badgeText = "TEST",
                 onClick = { showFitTestSheet = true },
                 enabled = isConnected
+            )
+
+            KenkashiActionRow(
+                title = "Permissions & Setup",
+                subtitle = "Review system access, Bluetooth, and phone call permissions",
+                badgeText = "REVIEW",
+                onClick = onOpenSetupScreen
             )
         }
 

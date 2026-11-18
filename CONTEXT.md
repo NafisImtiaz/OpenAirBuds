@@ -26,3 +26,6 @@ OpenAirBuds is a native Android companion application for BBK-ecosystem Bluetoot
   - Monospace uppercase captions and labels with generous letter-spacing
   - Geometric segmented noise control blocks and rectangular minimalist toggle switches
   - 3-tab bottom navigation (`DEVICES`, `EQ`, `PROFILE`) with underlined active state
+
+## Build & Versioning Conventions
+- **APK Rebuild Version Increment**: Whenever rebuilding the APK (`assembleDebug` or `assembleRelease`), always increment `versionName` by `0.0.1` (e.g. `1.0.0` → `1.0.1`) and increment `versionCode` by `1` in `app/build.gradle.kts`.

@@ -276,7 +276,15 @@ fun CustomEqSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
             KenkashiDivider()
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Live Spline Response Curve
+            KenkashiEqFrequencyVisualizer(
+                gains = gains,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // 2. 6-Band Minimalist Graphic Equalizer Console
             KenkashiGraphicEqualizer(

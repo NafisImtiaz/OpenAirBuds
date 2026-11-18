@@ -2,6 +2,14 @@ package com.openairbuds.app.ui.tabs
 
 import android.bluetooth.BluetoothDevice
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,6 +19,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +51,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
+import com.openairbuds.app.ui.theme.KenkashiMotion
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -160,9 +172,11 @@ fun SoundTab(
         }
 
         // 1. HERO SECTION (Dynamic theme & design system)
-        val heroArtworkRes = when (currentTheme) {
-            AppThemeMode.KENKASHI_DARK -> R.drawable.ic_kenkashi_hero_dark
-            AppThemeMode.NOTHING_DARK -> R.drawable.ic_earbuds_default_hero
+        val systemDark = isSystemInDarkTheme()
+        val isDark = currentTheme.isDark(systemDark)
+        val heroArtworkRes = when {
+            currentTheme == AppThemeMode.NOTHING_DARK -> R.drawable.ic_earbuds_default_hero
+            isDark -> R.drawable.ic_kenkashi_hero_dark
             else -> R.drawable.ic_kenkashi_hero
         }
 
@@ -208,7 +222,7 @@ fun SoundTab(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 4. ACOUSTIC LOGIC / AUDIO SETTINGS LIST
+        // 4. AUDIO SETTINGS LIST
         KenkashiAudioSettingsList(
             state = state,
             isEnabled = isConnected,
@@ -328,6 +342,31 @@ fun KenkashiBatteryCell(
     isCharging: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val targetPercent = percent ?: 0
+    val animatedPercent by animateIntAsState(
+        targetValue = targetPercent,
+        animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationSlow),
+        label = "BatteryPercentRoll"
+    )
+
+    val targetFraction = if (percent != null) (percent / 100f).coerceIn(0f, 1f) else 0f
+    val animatedFraction by animateFloatAsState(
+        targetValue = targetFraction,
+        animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationSlow),
+        label = "BatteryGaugeFraction"
+    )
+
+    val infiniteTransition = rememberInfiniteTransition(label = "ChargingPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ChargingPulseAlpha"
+    )
+
     Column(
         modifier = modifier.padding(vertical = 12.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -351,13 +390,14 @@ fun KenkashiBatteryCell(
                 Text(
                     text = "⚡",
                     fontSize = 9.sp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.graphicsLayer { alpha = pulseAlpha }
                 )
             }
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = if (percent != null) "$percent%" else "--",
+            text = if (percent != null) "$animatedPercent%" else "--",
             fontFamily = FontFamily.Serif,
             fontSize = 26.sp,
             fontWeight = FontWeight.Normal,
@@ -365,6 +405,27 @@ fun KenkashiBatteryCell(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Hairline battery level gauge
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                .height(2.dp)
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RectangleShape)
+        ) {
+            if (percent != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animatedFraction)
+                        .fillMaxHeight()
+                        .background(
+                            if (targetFraction < 0.20f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            RectangleShape
+                        )
+                )
+            }
+        }
     }
 }
 
@@ -473,7 +534,7 @@ fun KenkashiNoiseControlSection(
 }
 
 /**
- * 4. AUDIO SETTINGS LIST (Acoustic Logic rows matching Screen 2)
+ * 4. AUDIO SETTINGS LIST (rows matching Screen 2)
  */
 @Composable
 fun KenkashiAudioSettingsList(
@@ -489,17 +550,7 @@ fun KenkashiAudioSettingsList(
 ) {
     Column(modifier = modifier) {
         KenkashiDivider()
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Acoustic Logic",
-            fontFamily = FontFamily.Serif,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Row 1: Wind Noise Reduction
         KenkashiSettingRow(

@@ -141,13 +141,16 @@ private val M3ForestGreenLightColorScheme = lightColorScheme(
 
 @Composable
 fun OpenAirBudsTheme(
-    themeMode: AppThemeMode = AppThemeMode.KENKASHI_PAPER,
+    themeMode: AppThemeMode = AppThemeMode.AUTO,
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
 
+    val isDark = themeMode.isDark(darkTheme)
+
     val colorScheme = when (themeMode) {
+        AppThemeMode.AUTO -> if (darkTheme) KenkashiDarkColorScheme else KenkashiPaperColorScheme
         AppThemeMode.KENKASHI_PAPER -> KenkashiPaperColorScheme
         AppThemeMode.KENKASHI_DARK -> KenkashiDarkColorScheme
         AppThemeMode.NOTHING_DARK -> AmoledDarkColorScheme

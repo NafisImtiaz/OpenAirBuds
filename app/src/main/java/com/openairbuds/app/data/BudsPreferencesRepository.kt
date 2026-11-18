@@ -32,7 +32,8 @@ data class BudsPreferences(
     val bassWaveLevel: Int = 0,
     val isVoiceEnhanceEnabled: Boolean = false,
     val isAutoAnswerCallsEnabled: Boolean = false,
-    val isFindPhoneEnabled: Boolean = false
+    val isFindPhoneEnabled: Boolean = false,
+    val isOnboardingCompleted: Boolean = false
 )
 
 class BudsPreferencesRepository(
@@ -85,6 +86,7 @@ class BudsPreferencesRepository(
             val voiceEnhance = prefs[KEY_VOICE_ENHANCE] ?: false
             val autoAnswerCalls = prefs[KEY_AUTO_ANSWER_CALLS] ?: false
             val findPhone = prefs[KEY_FIND_PHONE] ?: false
+            val onboardingCompleted = prefs[KEY_ONBOARDING_COMPLETED] ?: false
 
             BudsPreferences(
                 lastConnectedMac = mac,
@@ -102,7 +104,8 @@ class BudsPreferencesRepository(
                 bassWaveLevel = bassWaveLevel,
                 isVoiceEnhanceEnabled = voiceEnhance,
                 isAutoAnswerCallsEnabled = autoAnswerCalls,
-                isFindPhoneEnabled = findPhone
+                isFindPhoneEnabled = findPhone,
+                isOnboardingCompleted = onboardingCompleted
             )
         }
 
@@ -227,6 +230,12 @@ class BudsPreferencesRepository(
         }
     }
 
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[KEY_ONBOARDING_COMPLETED] = completed
+        }
+    }
+
     suspend fun clear() {
         dataStore.edit { prefs ->
             prefs.clear()
@@ -250,6 +259,7 @@ class BudsPreferencesRepository(
         val KEY_VOICE_ENHANCE = booleanPreferencesKey("voice_enhance")
         val KEY_AUTO_ANSWER_CALLS = booleanPreferencesKey("auto_answer_calls")
         val KEY_FIND_PHONE = booleanPreferencesKey("find_phone")
+        val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
         private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "buds_preferences")
 
