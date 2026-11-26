@@ -1,7 +1,17 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        FileInputStream(file).use { load(it) }
+    }
 }
 
 android {
@@ -12,17 +22,34 @@ android {
         applicationId = "com.openairbuds.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "1.0.0"
+        versionCode = 22
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            val keyPath = localProperties.getProperty("KEYSTORE_PATH")
+            val keystoreFile = if (keyPath != null) rootProject.file(keyPath) else null
+            if (keystoreFile != null && keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = localProperties.getProperty("KEYSTORE_PASSWORD")
+                keyAlias = localProperties.getProperty("KEY_ALIAS")
+                keyPassword = localProperties.getProperty("KEY_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+            } else {
+                initWith(signingConfigs.getByName("debug"))
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
