@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
@@ -54,7 +56,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
@@ -81,6 +85,8 @@ import com.openairbuds.app.model.BudsState
 import com.openairbuds.app.model.ConnectionStatus
 import com.openairbuds.app.model.EqPreset
 import com.openairbuds.app.model.EqPresetOption
+import com.openairbuds.app.model.FitSealResult
+import com.openairbuds.app.model.FitTestState
 import com.openairbuds.app.ui.theme.AppThemeMode
 import com.openairbuds.app.ui.theme.KenkashiBlack
 import com.openairbuds.app.ui.theme.KenkashiHairline
@@ -125,14 +131,27 @@ fun KenkashiSwitch(
     Box(
         modifier = modifier
             .size(width = trackWidth, height = trackHeight)
-            .border(
-                BorderStroke(
-                    1.dp,
-                    if (enabled) borderColor else borderColor.copy(alpha = 0.4f)
-                ),
+            .background(
+                if (checked) {
+                    if (enabled) activeColor else activeColor.copy(alpha = 0.4f)
+                } else {
+                    MaterialTheme.colorScheme.background
+                },
                 RectangleShape
             )
-            .background(Color.Transparent, RectangleShape)
+            .then(
+                if (!checked) {
+                    Modifier.border(
+                        BorderStroke(
+                            0.5.dp,
+                            if (enabled) borderColor else borderColor.copy(alpha = 0.4f)
+                        ),
+                        RectangleShape
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -150,12 +169,11 @@ fun KenkashiSwitch(
             modifier = Modifier
                 .offset { IntOffset(thumbOffset.roundToPx(), 0) }
                 .size(thumbSize)
-                .then(
-                    if (checked) {
-                        Modifier.background(if (enabled) activeColor else activeColor.copy(alpha = 0.4f), RectangleShape)
-                    } else {
-                        Modifier.border(BorderStroke(1.dp, if (enabled) inactiveColor else inactiveColor.copy(alpha = 0.4f)), RectangleShape)
-                    }
+                .background(
+                    if (checked) MaterialTheme.colorScheme.onPrimary
+                    else if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                    else inactiveColor.copy(alpha = 0.4f),
+                    RectangleShape
                 )
         )
     }
@@ -179,45 +197,30 @@ fun KenkashiSegmentedBar(
 ) {
     val haptic = LocalHapticFeedback.current
     val count = options.size.coerceAtLeast(1)
+    val clampedIndex = selectedIndex.coerceIn(0, count - 1)
+    val animatedIndex by animateFloatAsState(
+        targetValue = clampedIndex.toFloat(),
+        animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationFast),
+        label = "SegmentHighlightSlide"
+    )
 
-    BoxWithConstraints(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
-            .border(BorderStroke(1.dp, borderColor), RectangleShape)
-    ) {
-        val segmentWidth = maxWidth / count
-        val targetX = segmentWidth * selectedIndex.coerceIn(0, count - 1)
-        val animatedX by animateDpAsState(
-            targetValue = targetX,
-            animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationFast),
-            label = "SegmentHighlightSlide"
-        )
-
-        // 1. Sliding mechanical active highlight block
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(animatedX.roundToPx(), 0) }
-                .width(segmentWidth)
-                .fillMaxHeight()
-                .background(activeBg, RectangleShape)
-        )
-
-        // 2. Hairline grid dividers
-        Row(modifier = Modifier.fillMaxSize()) {
-            options.forEachIndexed { index, _ ->
-                Spacer(modifier = Modifier.weight(1f))
-                if (index < options.size - 1) {
-                    VerticalDivider(
-                        thickness = 1.dp,
-                        color = borderColor,
-                        modifier = Modifier.fillMaxHeight()
-                    )
-                }
+            .background(MaterialTheme.colorScheme.surfaceContainer, RectangleShape)
+            .padding(4.dp)
+            .drawBehind {
+                val segmentWidth = size.width / count
+                val left = segmentWidth * animatedIndex
+                drawRect(
+                    color = activeBg,
+                    topLeft = Offset(left, 0f),
+                    size = Size(segmentWidth, size.height)
+                )
             }
-        }
-
-        // 3. Labels and touch targets
+    ) {
+        // Labels and touch targets
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
@@ -261,19 +264,20 @@ fun KenkashiSegmentedBar(
 }
 
 /**
- * 3. KENKASHI BADGE (e.g., [LDAC], [50dB], [AAC])
+ * 3. KENKASHI BADGE (e.g., [LDAC], [50dB], [45ms])
+ * Uses a clean borderless tonal surface chip instead of a 1dp wireframe box.
  */
 @Composable
 fun KenkashiBadge(
     text: String,
     modifier: Modifier = Modifier,
-    borderColor: Color = MaterialTheme.colorScheme.outline,
+    containerColor: Color = MaterialTheme.colorScheme.background,
     textColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
     Box(
         modifier = modifier
-            .border(BorderStroke(1.dp, borderColor), RectangleShape)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .background(containerColor, RectangleShape)
+            .padding(horizontal = 7.dp, vertical = 3.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -288,16 +292,34 @@ fun KenkashiBadge(
 }
 
 /**
+ * 3B. KENKASHI GROUPED SURFACE PANEL
+ * Groups related setting/action rows on a tonal surface without outer 1dp borders.
+ */
+@Composable
+fun KenkashiSectionPanel(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainer, RectangleShape)
+            .padding(horizontal = 14.dp, vertical = 2.dp),
+        content = content
+    )
+}
+
+/**
  * 4. KENKASHI HAIRLINE DIVIDER
  */
 @Composable
 fun KenkashiDivider(
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.outline
+    color: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
 ) {
     HorizontalDivider(
         modifier = modifier.fillMaxWidth(),
-        thickness = 1.dp,
+        thickness = 0.5.dp,
         color = color
     )
 }
@@ -313,9 +335,27 @@ fun KenkashiSettingRow(
     checked: Boolean,
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    showDivider: Boolean = true
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    val haptic = LocalHapticFeedback.current
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.45f)
+            .then(
+                if (enabled && onCheckedChange != null) {
+                    Modifier.clickable {
+                        runCatching {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                        onCheckedChange(!checked)
+                    }
+                } else {
+                    Modifier
+                }
+            )
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -356,7 +396,9 @@ fun KenkashiSettingRow(
                 enabled = enabled
             )
         }
-        KenkashiDivider()
+        if (showDivider) {
+            KenkashiDivider()
+        }
     }
 }
 
@@ -370,11 +412,13 @@ fun KenkashiActionRow(
     badgeText: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    showDivider: Boolean = true
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.45f)
             .kenkashiPressable(enabled = enabled, onClick = onClick)
     ) {
         Row(
@@ -403,11 +447,31 @@ fun KenkashiActionRow(
                 }
             }
 
-            if (badgeText != null) {
-                KenkashiBadge(text = badgeText)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (badgeText != null) {
+                    Text(
+                        text = badgeText.uppercase(),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
-        KenkashiDivider()
+        if (showDivider) {
+            KenkashiDivider()
+        }
     }
 }
 
@@ -431,8 +495,10 @@ fun KenkashiThemeToggle(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(46.dp)
-            .border(BorderStroke(1.dp, borderColor), RectangleShape),
+            .height(48.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainer, RectangleShape)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Option 1: Paper Light
@@ -456,7 +522,7 @@ fun KenkashiThemeToggle(
                         .border(BorderStroke(1.dp, if (isPaperActive) Color(0xFF111111) else borderColor), RectangleShape)
                 )
                 Text(
-                    text = "PAPER LIGHT",
+                    text = "LIGHT",
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = if (isPaperActive) FontWeight.Bold else FontWeight.Medium,
@@ -468,12 +534,6 @@ fun KenkashiThemeToggle(
                 )
             }
         }
-
-        VerticalDivider(
-            thickness = 1.dp,
-            color = borderColor,
-            modifier = Modifier.fillMaxHeight()
-        )
 
         // Option 2: Charcoal Dark
         val isDarkActive = currentTheme == AppThemeMode.KENKASHI_DARK
@@ -496,7 +556,7 @@ fun KenkashiThemeToggle(
                         .border(BorderStroke(1.dp, if (isDarkActive) Color(0xFFF9F8F5) else borderColor), RectangleShape)
                 )
                 Text(
-                    text = "CHARCOAL DARK",
+                    text = "DARK",
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = if (isDarkActive) FontWeight.Bold else FontWeight.Medium,
@@ -508,12 +568,6 @@ fun KenkashiThemeToggle(
                 )
             }
         }
-
-        VerticalDivider(
-            thickness = 1.dp,
-            color = borderColor,
-            modifier = Modifier.fillMaxHeight()
-        )
 
         // Option 3: Auto (Follows System Light / Dark)
         val isAutoActive = currentTheme == AppThemeMode.AUTO
@@ -568,31 +622,6 @@ fun KenkashiThemeToggle(
             }
         }
     }
-}
-
-/**
- * Backward-compatible 2-option KenkashiThemeToggle overload.
- */
-@Composable
-fun KenkashiThemeToggle(
-    isDark: Boolean,
-    onSelectTheme: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    borderColor: Color = MaterialTheme.colorScheme.outline,
-    activeBg: Color = MaterialTheme.colorScheme.primary,
-    activeText: Color = MaterialTheme.colorScheme.onPrimary,
-    inactiveText: Color = MaterialTheme.colorScheme.onSurfaceVariant
-) {
-    val currentTheme = if (isDark) AppThemeMode.KENKASHI_DARK else AppThemeMode.KENKASHI_PAPER
-    KenkashiThemeToggle(
-        currentTheme = currentTheme,
-        onSelectTheme = { selected -> onSelectTheme(selected == AppThemeMode.KENKASHI_DARK) },
-        modifier = modifier,
-        borderColor = borderColor,
-        activeBg = activeBg,
-        activeText = activeText,
-        inactiveText = inactiveText
-    )
 }
 
 /**
@@ -839,184 +868,6 @@ fun KenkashiDynamicBassSheet(
 }
 
 /**
- * Backward compatibility alias for KenkashiDynamicBassSheet.
- */
-@Composable
-fun KenkashiDynamicBassDialog(
-    isEnabled: Boolean,
-    currentLevel: Int,
-    onToggle: (Boolean) -> Unit,
-    onLevelChange: (Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    KenkashiDynamicBassSheet(
-        isEnabled = isEnabled,
-        currentLevel = currentLevel,
-        onToggle = onToggle,
-        onLevelChange = onLevelChange,
-        onDismiss = onDismiss
-    )
-}
-
-/**
- * 11. KENKASHI EQUALIZER BOTTOM SHEET
- * Full-width edge-to-edge sharp bottom sheet with hairline dividers and solid active selection.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun KenkashiEqualizerSheet(
-    currentPreset: EqPreset,
-    options: List<EqPresetOption> = emptyList(),
-    onSelectPreset: (EqPreset) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val presetsToDisplay = remember(options) {
-        val baseList = if (options.isNotEmpty()) {
-            options
-        } else {
-            EqPreset.entries.map { EqPresetOption(it.slot, it.displayName) }
-        }
-        if (baseList.none { it.slot == EqPreset.CUSTOM.slot }) {
-            baseList + EqPresetOption(EqPreset.CUSTOM.slot, EqPreset.CUSTOM.displayName, "Custom equalizer profile")
-        } else {
-            baseList
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.background,
-        shape = RectangleShape,
-        scrimColor = Color.Black.copy(alpha = 0.5f),
-        dragHandle = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.fillMaxWidth().height(16.dp))
-                KenkashiDivider()
-            }
-        }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-                .padding(bottom = 32.dp)
-        ) {
-            Text(
-                text = "Equalizer",
-                fontFamily = FontFamily.Serif,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Acoustic frequency response profile",
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                letterSpacing = 0.5.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            KenkashiDivider()
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-            ) {
-                presetsToDisplay.forEachIndexed { index, opt ->
-                    val isSelected = currentPreset.slot == opt.slot
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable {
-                                val matched = EqPreset.fromSlot(opt.slot)
-                                onSelectPreset(matched)
-                            },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = opt.displayName.uppercase(),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                letterSpacing = 1.sp,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                            )
-                            if (isSelected) {
-                                Text(
-                                    text = "ACTIVE",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        }
-                    }
-
-                    if (index < presetsToDisplay.size - 1) {
-                        KenkashiDivider()
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                    .kenkashiPressable(onClick = onDismiss),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "CLOSE",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-/**
- * Backward compatibility alias for KenkashiEqualizerSheet.
- */
-@Composable
-fun KenkashiEqualizerDialog(
-    currentPreset: EqPreset,
-    options: List<EqPresetOption> = emptyList(),
-    onSelectPreset: (EqPreset) -> Unit,
-    onDismiss: () -> Unit
-) {
-    KenkashiEqualizerSheet(
-        currentPreset = currentPreset,
-        options = options,
-        onSelectPreset = onSelectPreset,
-        onDismiss = onDismiss
-    )
-}
-
-/**
  * 12. KENKASHI DEVICE SELECTOR
  * Inline flat rectangular boxed container with 1.dp hairline borders.
  * Replaces the legacy 24.dp rounded card and green accents.
@@ -1202,7 +1053,7 @@ fun KenkashiDeviceSelector(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KenkashiFitTestSheet(
-    fitTestResult: String?,
+    fitTestState: FitTestState,
     placement: BudsPlacement,
     currentTheme: AppThemeMode,
     onStartTest: () -> Unit,
@@ -1210,19 +1061,16 @@ fun KenkashiFitTestSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var hasStarted by remember { mutableStateOf(false) }
     var timedOut by remember { mutableStateOf(false) }
+    val canStart = FitTestState.canStart(placement)
 
-    LaunchedEffect(hasStarted, fitTestResult) {
-        if (hasStarted && fitTestResult == "Testing seal...") {
+    LaunchedEffect(fitTestState) {
+        if (fitTestState is FitTestState.Testing) {
+            timedOut = false
             delay(15000L)
-            if (fitTestResult == "Testing seal...") {
-                timedOut = true
-                onStopTest()
-            }
-        }
-        if (fitTestResult != null && fitTestResult != "Testing seal...") {
-            hasStarted = false
+            timedOut = true
+            onStopTest()
+        } else if (fitTestState is FitTestState.Completed || fitTestState is FitTestState.Error) {
             timedOut = false
         }
     }
@@ -1340,11 +1188,9 @@ fun KenkashiFitTestSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            val isFailed = fitTestResult?.startsWith("Failed") == true
-
             when {
                 // 1. IN PROGRESS
-                hasStarted && fitTestResult == "Testing seal..." && !timedOut && !isFailed -> {
+                fitTestState is FitTestState.Testing && !timedOut -> {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(32.dp),
@@ -1374,7 +1220,7 @@ fun KenkashiFitTestSheet(
                             .height(44.dp)
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
                             .kenkashiPressable {
-                                hasStarted = false
+                                timedOut = false
                                 onStopTest()
                             },
                         contentAlignment = Alignment.Center
@@ -1390,8 +1236,13 @@ fun KenkashiFitTestSheet(
                     }
                 }
 
-                // 2. TIMED OUT / FAILED
-                timedOut || isFailed -> {
+                // 2. TIMED OUT / ERROR
+                timedOut || fitTestState is FitTestState.Error -> {
+                    val errorMsg = if (timedOut) {
+                        "TEST TIMED OUT"
+                    } else {
+                        (fitTestState as FitTestState.Error).message.uppercase()
+                    }
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = "Warning",
@@ -1400,7 +1251,7 @@ fun KenkashiFitTestSheet(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = if (timedOut) "TEST TIMED OUT" else (fitTestResult ?: "FAILED TO COMPLETE TEST").uppercase(),
+                        text = errorMsg,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -1441,93 +1292,51 @@ fun KenkashiFitTestSheet(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
-                                .background(MaterialTheme.colorScheme.primary, RectangleShape)
+                                .background(
+                                    if (canStart) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                    RectangleShape
+                                )
                                 .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                                .kenkashiPressable {
-                                    timedOut = false
-                                    hasStarted = true
-                                    onStartTest()
-                                },
+                                .then(
+                                    if (canStart) {
+                                        Modifier.kenkashiPressable {
+                                            timedOut = false
+                                            onStartTest()
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "RETRY",
+                                text = if (canStart) "RETRY" else "WEAR BOTH BUDS",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp,
-                                color = MaterialTheme.colorScheme.onPrimary
+                                color = if (canStart) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
 
                 // 3. RESULTS RECEIVED
-                fitTestResult != null && fitTestResult != "Testing seal..." && !isFailed -> {
-                    val hasLeft = fitTestResult.contains("Left", ignoreCase = true)
-                    val hasRight = fitTestResult.contains("Right", ignoreCase = true)
-                    val isLeftGood = fitTestResult.contains("Left: Good", ignoreCase = true)
-                    val isRightGood = fitTestResult.contains("Right: Good", ignoreCase = true)
-
+                fitTestState is FitTestState.Completed -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Left Cell
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                                .padding(14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "LEFT EARBUD",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 10.sp,
-                                    letterSpacing = 1.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = if (!hasLeft) "NOT DETECTED" else if (isLeftGood) "GOOD SEAL" else "POOR FIT",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp,
-                                    color = if (isLeftGood) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-
-                        // Right Cell
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                                .padding(14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "RIGHT EARBUD",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 10.sp,
-                                    letterSpacing = 1.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = if (!hasRight) "NOT DETECTED" else if (isRightGood) "GOOD SEAL" else "POOR FIT",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp,
-                                    color = if (isRightGood) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
+                        FitTestSealCell(
+                            label = "LEFT EARBUD",
+                            seal = fitTestState.left,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FitTestSealCell(
+                            label = "RIGHT EARBUD",
+                            seal = fitTestState.right,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -1536,22 +1345,30 @@ fun KenkashiFitTestSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp)
-                            .background(MaterialTheme.colorScheme.primary, RectangleShape)
+                            .background(
+                                if (canStart) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                RectangleShape
+                            )
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .kenkashiPressable {
-                                timedOut = false
-                                hasStarted = true
-                                onStartTest()
-                            },
+                            .then(
+                                if (canStart) {
+                                    Modifier.kenkashiPressable {
+                                        timedOut = false
+                                        onStartTest()
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "TEST AGAIN",
+                            text = if (canStart) "TEST AGAIN" else "INSERT BOTH EARBUDS",
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = if (canStart) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1559,10 +1376,14 @@ fun KenkashiFitTestSheet(
                 // 4. INITIAL STATE
                 else -> {
                     Text(
-                        text = "Play an acoustic diagnostic chirp to verify that your silicone ear tips create a proper acoustic seal.",
+                        text = if (canStart) {
+                            "Play an acoustic diagnostic chirp to verify that your silicone ear tips create a proper acoustic seal."
+                        } else {
+                            "Insert both earbuds firmly into your ears to run the acoustic seal test."
+                        },
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (canStart) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center
                     )
 
@@ -1572,26 +1393,75 @@ fun KenkashiFitTestSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(46.dp)
-                            .background(MaterialTheme.colorScheme.primary, RectangleShape)
+                            .background(
+                                if (canStart) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                RectangleShape
+                            )
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .kenkashiPressable {
-                                timedOut = false
-                                hasStarted = true
-                                onStartTest()
-                            },
+                            .then(
+                                if (canStart) {
+                                    Modifier.kenkashiPressable {
+                                        timedOut = false
+                                        onStartTest()
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "START TEST",
+                            text = if (canStart) "START TEST" else "INSERT BOTH EARBUDS",
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = if (canStart) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FitTestSealCell(
+    label: String,
+    seal: FitSealResult?,
+    modifier: Modifier = Modifier
+) {
+    val resultText = seal?.label ?: "NOT DETECTED"
+    val resultColor = when (seal) {
+        FitSealResult.GOOD -> MaterialTheme.colorScheme.primary
+        FitSealResult.AVERAGE -> MaterialTheme.colorScheme.onSurface
+        FitSealResult.POOR -> MaterialTheme.colorScheme.error
+        null -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Box(
+        modifier = modifier
+            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
+            .padding(14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = label,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = resultText,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
+                color = resultColor
+            )
         }
     }
 }

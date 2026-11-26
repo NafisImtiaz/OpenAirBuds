@@ -63,6 +63,7 @@ import com.openairbuds.app.model.GestureBinding
 import com.openairbuds.app.protocol.OpoConstants
 import com.openairbuds.app.ui.components.KenkashiBadge
 import com.openairbuds.app.ui.components.KenkashiDivider
+import com.openairbuds.app.ui.components.KenkashiSectionPanel
 import com.openairbuds.app.ui.components.KenkashiSegmentedBar
 import com.openairbuds.app.ui.components.KenkashiSwitch
 import com.openairbuds.app.ui.theme.AppThemeMode
@@ -75,11 +76,16 @@ fun ControlsTab(
     currentTheme: AppThemeMode = AppThemeMode.KENKASHI_PAPER,
     onSetHoldCycle: (anc: Boolean, transparency: Boolean, normal: Boolean) -> Unit,
     onUpdateGesture: (device: Byte, button: Byte, action: Byte, function: Byte) -> Unit,
-    onToggleWear: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selectedEarbudTab: Int? = null,
+    onSelectEarbudTab: ((Int) -> Unit)? = null
 ) {
-    val isConnected = state.connectionStatus is ConnectionStatus.Connected
-    var selectedEarbudTab by remember { mutableIntStateOf(0) } // 0 = Left, 1 = Right
+    var internalEarbudTab by remember { mutableIntStateOf(0) } // 0 = Left, 1 = Right
+    val activeEarbudTab = selectedEarbudTab ?: internalEarbudTab
+    val setEarbudTab: (Int) -> Unit = { idx ->
+        internalEarbudTab = idx
+        onSelectEarbudTab?.invoke(idx)
+    }
     var selectedGestureForEdit by remember { mutableStateOf<GestureBinding?>(null) }
     var validationWarning by remember { mutableStateOf<String?>(null) }
 
@@ -91,29 +97,29 @@ fun ControlsTab(
 
     // Available gesture mappings
     val availableFunctions = listOf(
-        1.toByte() to "Play / Pause",
-        2.toByte() to "Next Track",
-        3.toByte() to "Previous Track",
-        5.toByte() to "Noise Control (ANC)",
-        7.toByte() to "Volume Up",
-        8.toByte() to "Volume Down",
-        4.toByte() to "Voice Assistant",
-        6.toByte() to "Game Mode",
+        OpoConstants.GESTURE_FN_PLAY_PAUSE to "Play / Pause",
+        OpoConstants.GESTURE_FN_NEXT_TRACK to "Next Track",
+        OpoConstants.GESTURE_FN_PREVIOUS_TRACK to "Previous Track",
+        OpoConstants.GESTURE_FN_CYCLE_ANC to "Noise Control (ANC)",
+        OpoConstants.GESTURE_FN_VOLUME_UP to "Volume Up",
+        OpoConstants.GESTURE_FN_VOLUME_DOWN to "Volume Down",
+        OpoConstants.GESTURE_FN_VOICE_ASSISTANT to "Voice Assistant",
+        OpoConstants.GESTURE_FN_GAME_MODE to "Game Mode",
         OpoConstants.GESTURE_FN_SWITCH_DEVICES to "Switch Devices",
-        0.toByte() to "None"
+        OpoConstants.GESTURE_FN_NONE to "None"
     )
 
     val currentBindings = state.gestureBindings
     val activeBindings = remember(currentBindings) {
         if (currentBindings.isNotEmpty()) currentBindings else listOf(
-            GestureBinding(device = 1, button = 1, action = 1, function = 1),
-            GestureBinding(device = 1, button = 1, action = 2, function = 2),
-            GestureBinding(device = 1, button = 1, action = 3, function = 3),
-            GestureBinding(device = 1, button = 1, action = 4, function = 5),
-            GestureBinding(device = 2, button = 1, action = 1, function = 1),
-            GestureBinding(device = 2, button = 1, action = 2, function = 2),
-            GestureBinding(device = 2, button = 1, action = 3, function = 3),
-            GestureBinding(device = 2, button = 1, action = 4, function = 5)
+            GestureBinding(device = 1, button = 1, action = 1, function = OpoConstants.GESTURE_FN_PLAY_PAUSE),
+            GestureBinding(device = 1, button = 1, action = 2, function = OpoConstants.GESTURE_FN_NEXT_TRACK),
+            GestureBinding(device = 1, button = 1, action = 3, function = OpoConstants.GESTURE_FN_PREVIOUS_TRACK),
+            GestureBinding(device = 1, button = 1, action = 4, function = OpoConstants.GESTURE_FN_CYCLE_ANC),
+            GestureBinding(device = 2, button = 1, action = 1, function = OpoConstants.GESTURE_FN_PLAY_PAUSE),
+            GestureBinding(device = 2, button = 1, action = 2, function = OpoConstants.GESTURE_FN_NEXT_TRACK),
+            GestureBinding(device = 2, button = 1, action = 3, function = OpoConstants.GESTURE_FN_PREVIOUS_TRACK),
+            GestureBinding(device = 2, button = 1, action = 4, function = OpoConstants.GESTURE_FN_CYCLE_ANC)
         )
     }
 
@@ -130,8 +136,8 @@ fun ControlsTab(
         // 1. LEFT / RIGHT EARBUD SEGMENTED SELECTOR
         KenkashiSegmentedBar(
             options = listOf("Left Earbud", "Right Earbud"),
-            selectedIndex = selectedEarbudTab,
-            onSelectIndex = { selectedEarbudTab = it }
+            selectedIndex = activeEarbudTab,
+            onSelectIndex = setEarbudTab
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -141,7 +147,7 @@ fun ControlsTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(170.dp)
-                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainer, RectangleShape)
                 .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
@@ -149,7 +155,7 @@ fun ControlsTab(
             val isDarkTheme = currentTheme.isDark(systemDark)
 
             AnimatedContent(
-                targetState = selectedEarbudTab,
+                targetState = activeEarbudTab,
                 transitionSpec = {
                     if (targetState > initialState) {
                         (slideInHorizontally(animationSpec = KenkashiMotion.mechanicalTween()) { width -> width / 2 } +
@@ -208,22 +214,19 @@ fun ControlsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // 3. GESTURE ACTIONS LIST
-        val devCode = if (selectedEarbudTab == 0) 1.toByte() else 2.toByte()
+        val devCode = if (activeEarbudTab == 0) 1.toByte() else 2.toByte()
         val currentDevBindings = activeBindings.filter { it.device == devCode }
 
         val singleTap = currentDevBindings.firstOrNull { it.action == 1.toByte() }
-            ?: GestureBinding(device = devCode, button = 1, action = 1, function = 1)
+            ?: GestureBinding(device = devCode, button = 1, action = 1, function = OpoConstants.GESTURE_FN_PLAY_PAUSE)
         val doubleTap = currentDevBindings.firstOrNull { it.action == 2.toByte() }
-            ?: GestureBinding(device = devCode, button = 1, action = 2, function = 2)
+            ?: GestureBinding(device = devCode, button = 1, action = 2, function = OpoConstants.GESTURE_FN_NEXT_TRACK)
         val tripleTap = currentDevBindings.firstOrNull { it.action == 3.toByte() }
-            ?: GestureBinding(device = devCode, button = 1, action = 3, function = 3)
+            ?: GestureBinding(device = devCode, button = 1, action = 3, function = OpoConstants.GESTURE_FN_PREVIOUS_TRACK)
         val touchAndHold = currentDevBindings.firstOrNull { it.action == 4.toByte() }
-            ?: GestureBinding(device = devCode, button = 1, action = 4, function = 5)
+            ?: GestureBinding(device = devCode, button = 1, action = 4, function = OpoConstants.GESTURE_FN_CYCLE_ANC)
 
         Column(modifier = Modifier.fillMaxWidth()) {
-            KenkashiDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-
             Text(
                 text = "Touch Controls",
                 fontFamily = FontFamily.Serif,
@@ -234,42 +237,42 @@ fun ControlsTab(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Row 1: Single Tap
-            KenkashiGestureRow(
-                gestureName = "Single Tap",
-                actionName = singleTap.actionName,
-                onClick = { selectedGestureForEdit = singleTap }
-            )
+            KenkashiSectionPanel {
+                // Row 1: Single Tap
+                KenkashiGestureRow(
+                    gestureName = "Single Tap",
+                    actionName = singleTap.actionName,
+                    onClick = { selectedGestureForEdit = singleTap }
+                )
 
-            // Row 2: Double Tap
-            KenkashiGestureRow(
-                gestureName = "Double Tap",
-                actionName = doubleTap.actionName,
-                onClick = { selectedGestureForEdit = doubleTap }
-            )
+                // Row 2: Double Tap
+                KenkashiGestureRow(
+                    gestureName = "Double Tap",
+                    actionName = doubleTap.actionName,
+                    onClick = { selectedGestureForEdit = doubleTap }
+                )
 
-            // Row 3: Triple Tap
-            KenkashiGestureRow(
-                gestureName = "Triple Tap",
-                actionName = tripleTap.actionName,
-                onClick = { selectedGestureForEdit = tripleTap }
-            )
+                // Row 3: Triple Tap
+                KenkashiGestureRow(
+                    gestureName = "Triple Tap",
+                    actionName = tripleTap.actionName,
+                    onClick = { selectedGestureForEdit = tripleTap }
+                )
 
-            // Row 4: Touch & Hold
-            KenkashiGestureRow(
-                gestureName = "Touch & Hold",
-                actionName = touchAndHold.actionName,
-                onClick = { selectedGestureForEdit = touchAndHold }
-            )
+                // Row 4: Touch & Hold
+                KenkashiGestureRow(
+                    gestureName = "Touch & Hold",
+                    actionName = touchAndHold.actionName,
+                    onClick = { selectedGestureForEdit = touchAndHold },
+                    showDivider = false
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // 4. ANC CYCLE MODE SECTION
         Column(modifier = Modifier.fillMaxWidth()) {
-            KenkashiDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-
             Text(
                 text = "ANC Cycle Mode",
                 fontFamily = FontFamily.Serif,
@@ -291,7 +294,9 @@ fun ControlsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape),
+                    .background(MaterialTheme.colorScheme.surfaceContainer, RectangleShape)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // ANC toggle block
@@ -310,8 +315,6 @@ fun ControlsTab(
                     modifier = Modifier.weight(1f)
                 )
 
-                VerticalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
-
                 // Transparency toggle block
                 KenkashiCycleBlock(
                     title = "TRANSPARENCY",
@@ -327,8 +330,6 @@ fun ControlsTab(
                     },
                     modifier = Modifier.weight(1.3f)
                 )
-
-                VerticalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
 
                 // Normal toggle block
                 KenkashiCycleBlock(
@@ -450,15 +451,15 @@ fun ControlsTab(
 fun KenkashiGestureRow(
     gestureName: String,
     actionName: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    showDivider: Boolean = true
 ) {
     Column {
-        KenkashiDivider()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(vertical = 16.dp),
+                .padding(vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -472,21 +473,26 @@ fun KenkashiGestureRow(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = actionName,
+                    text = actionName.uppercase(),
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.6.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        if (showDivider) {
+            KenkashiDivider()
         }
     }
 }

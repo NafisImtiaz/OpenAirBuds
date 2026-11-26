@@ -1,5 +1,6 @@
 package com.openairbuds.app.model
 
+import androidx.compose.runtime.Immutable
 import com.openairbuds.app.R
 
 enum class EarbudBrand(val displayName: String) {
@@ -9,15 +10,23 @@ enum class EarbudBrand(val displayName: String) {
     GENERIC("Earbuds")
 }
 
+@Immutable
 data class EqPresetOption(
     val slot: Byte,
     val displayName: String,
     val description: String = ""
 )
 
+@Immutable
 data class DeviceCapabilities(
     val hasAnc: Boolean = true,
     val maxAncDb: Int = 50,
+    val supportedAncLevels: List<AncLevel> = listOf(
+        AncLevel.MILD,
+        AncLevel.MODERATE,
+        AncLevel.HIGH_50DB,
+        AncLevel.SMART
+    ),
     val supportedNoiseModes: List<NoiseControlMode> = listOf(
         NoiseControlMode.NOISE_CANCELLATION,
         NoiseControlMode.TRANSPARENCY,
@@ -40,6 +49,7 @@ data class DeviceCapabilities(
     val hiResCodec: String = "LHDC"
 )
 
+@Immutable
 sealed class EarbudArtwork {
     data class BundledResource(
         val heroRes: Int,
@@ -50,6 +60,7 @@ sealed class EarbudArtwork {
     data object UniversalVector : EarbudArtwork()
 }
 
+@Immutable
 data class DeviceProfile(
     val id: String,
     val displayName: String,

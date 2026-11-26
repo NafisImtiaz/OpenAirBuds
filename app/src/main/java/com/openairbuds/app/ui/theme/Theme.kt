@@ -9,22 +9,29 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 
-// Official Color System from Visual Specification
+// Official Color System from Visual Specification (Monochrome AMOLED)
 val DarkBackground = Color(0xFF000000)
 val PrimarySurface = Color(0xFF17181D)
 val SecondarySurface = Color(0xFF202127)
 val ElevatedSurface = Color(0xFF252630)
 val PrimaryText = Color(0xFFF5F5F7)
 val SecondaryText = Color(0xFFA1A3AE)
-val DisabledText = Color(0xFF686A75)
-val AccentColor = Color(0xFF8587FF)
-val AccentSecondary = Color(0xFFA4A7FF)
+val AccentColor = PrimaryText
+val AccentSecondary = SecondaryText
 val SubtleBorder = Color(0xFF30313B)
-val SwitchTrackColor = Color(0xFF454650)
-val BatteryGreen = Color(0xFF10B981)
-val BatteryIndigo = Color(0xFF8587FF)
+
+// Semantic Status Tokens
+val KenkashiSuccessLight = Color(0xFF2E7D32)
+val KenkashiSuccessDark = Color(0xFF4ADE80)
+
+@Composable
+fun kenkashiSuccessColor(): Color {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return if (isDark) KenkashiSuccessDark else KenkashiSuccessLight
+}
 
 // Kenkashi Acoustic Minimalist Design System
 val KenkashiPaperBg = Color(0xFFF9F8F5)
@@ -73,16 +80,6 @@ val KenkashiDarkColorScheme = darkColorScheme(
     onSurfaceVariant = KenkashiDarkTextSecondary,
     outline = KenkashiDarkHairline
 )
-
-// Backwards compatibility aliases
-val NothingBlack = DarkBackground
-val NothingCardBg = PrimarySurface
-val NothingCardBorder = SubtleBorder
-val NothingCircleInactive = ElevatedSurface
-val NothingCircleActive = Color(0xFFFFFFFF)
-val NothingTextWhite = PrimaryText
-val NothingTextMuted = SecondaryText
-val NothingEmerald = AccentColor
 
 val AmoledDarkColorScheme = darkColorScheme(
     primary = AccentColor,

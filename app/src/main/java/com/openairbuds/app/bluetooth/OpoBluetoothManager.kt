@@ -29,6 +29,7 @@ import com.openairbuds.app.model.ConnectionStatus
 import com.openairbuds.app.model.CustomEqProfile
 import com.openairbuds.app.model.DeviceProfileRegistry
 import com.openairbuds.app.model.EqPreset
+import com.openairbuds.app.model.FitTestState
 import com.openairbuds.app.model.GestureBinding
 import com.openairbuds.app.model.NoiseControlMode
 import com.openairbuds.app.protocol.OpoConstants
@@ -703,10 +704,6 @@ class OpoBluetoothManager(
         }
     }
 
-    fun setHoldCycle(mask: Short = 0x000B.toShort()) {
-        setHoldCycle(mask.toByte())
-    }
-
     fun setCustomEq(gains: List<Int>) {
         val clamped = gains.take(6).map { it.coerceIn(-6, 6) }
         val finalGains = clamped + List(maxOf(0, 6 - clamped.size)) { 0 }
@@ -822,6 +819,33 @@ class OpoBluetoothManager(
         return true
     }
 
+    fun renameCustomEqProfile(profileId: Int, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        val currentProfiles = _budsState.value.customEqProfiles.map { profile ->
+            if (profile.id == profileId) profile.copy(name = trimmed) else profile
+        }
+        _budsState.update { it.copy(customEqProfiles = currentProfiles) }
+        val activeSelectedId = _budsState.value.selectedCustomEqId
+        scope.launch {
+            try {
+                preferencesRepository.saveCustomEqProfiles(currentProfiles, activeSelectedId)
+                val target = currentProfiles.find { it.id == profileId }
+                if (target != null && socket?.isConnected == true) {
+                    val packet = OpoFrame.buildSetCustomEq(
+                        target.gains,
+                        nextSequence(),
+                        action = 0x02,
+                        name = target.name
+                    )
+                    sendRaw(packet)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to rename custom EQ profile", e)
+            }
+        }
+    }
+
     fun setWindNoiseReduction(enabled: Boolean) {
         _budsState.update { it.copy(isWindNoiseReductionEnabled = enabled) }
         scope.launch {
@@ -850,22 +874,6 @@ class OpoBluetoothManager(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send Hi-Res Audio packet", e)
-            }
-        }
-    }
-
-    fun setVolumeEnhancer(enabled: Boolean) {
-        _budsState.update { it.copy(isVolumeEnhancerEnabled = enabled) }
-        scope.launch {
-            try {
-                preferencesRepository.saveVolumeEnhancer(enabled)
-                if (socket?.isConnected == true) {
-                    Log.d(TAG, "Setting volume enhancer: $enabled")
-                    val packet = OpoFrame.buildSetVolumeEnhancer(enabled, nextSequence())
-                    sendRaw(packet)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to send volume enhancer packet", e)
             }
         }
     }
@@ -1000,9 +1008,9 @@ class OpoBluetoothManager(
 
     fun startFitTest(start: Boolean) {
         if (start) {
-            _budsState.update { it.copy(fitTestResult = "Testing seal...") }
+            _budsState.update { it.copy(fitTestState = FitTestState.Testing) }
         } else {
-            _budsState.update { it.copy(fitTestResult = null) }
+            _budsState.update { it.copy(fitTestState = FitTestState.Idle) }
         }
         scope.launch {
             try {
@@ -1011,12 +1019,12 @@ class OpoBluetoothManager(
                     val packet = OpoFrame.buildFitTest(start, nextSequence())
                     sendRaw(packet)
                 } else if (start) {
-                    _budsState.update { it.copy(fitTestResult = "Earbuds not connected") }
+                    _budsState.update { it.copy(fitTestState = FitTestState.Error("Earbuds not connected")) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send Fit Test packet", e)
                 if (start) {
-                    _budsState.update { it.copy(fitTestResult = "Failed to start test") }
+                    _budsState.update { it.copy(fitTestState = FitTestState.Error("Failed to start test")) }
                 }
             }
         }
@@ -1132,28 +1140,6 @@ class OpoBluetoothManager(
             telecomManager?.acceptRingingCall()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to auto-answer ringing call", e)
-        }
-    }
-
-    fun queryFirmware() {
-        scope.launch {
-            try {
-                val packet = OpoFrame.buildFirmwareQuery(nextSequence())
-                sendRaw(packet)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to send firmware query", e)
-            }
-        }
-    }
-
-    fun queryBattery() {
-        scope.launch {
-            try {
-                val packet = OpoFrame.buildBatteryQuery(0xF0.toByte())
-                sendRaw(packet)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to send battery query", e)
-            }
         }
     }
 
@@ -1274,7 +1260,7 @@ class OpoBluetoothManager(
                 firmwareVersion = null,
                 productId = null,
                 isFindMyBudsRinging = false,
-                fitTestResult = null,
+                fitTestState = FitTestState.Idle,
                 isA2dpConnected = isAudio
             )
         }

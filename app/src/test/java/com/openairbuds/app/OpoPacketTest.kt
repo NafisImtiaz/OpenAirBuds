@@ -360,8 +360,9 @@ class OpoPacketTest {
         val ftRaw = hexToBytes("aa 0a 00 00 04 02 ff 03 00 04 01 01")
         val ftFrames = OpoFrame.drainFrames(ftRaw.toMutableList())
         val ftState = OpoFrame.interpret(ftFrames[0], BudsState())
-        assertNotNull(ftState.fitTestResult)
-        assertTrue(ftState.fitTestResult!!.contains("Good seal"))
+        assertTrue(ftState.fitTestState is com.openairbuds.app.model.FitTestState.Completed)
+        val completed = ftState.fitTestState as com.openairbuds.app.model.FitTestState.Completed
+        assertEquals(com.openairbuds.app.model.FitSealResult.GOOD, completed.left)
     }
 
     @Test
@@ -448,26 +449,38 @@ class OpoPacketTest {
 
     @Test
     fun testGestureBindingNamesAndActions() {
-        val binding1 = GestureBinding(device = 1, button = 1, action = 1, function = 1)
+        val binding1 = GestureBinding(device = 1, button = 1, action = 1, function = OpoConstants.GESTURE_FN_PLAY_PAUSE)
         assertEquals("Left Bud", binding1.deviceName)
         assertEquals("Single Tap", binding1.gestureName)
         assertEquals("Play / Pause", binding1.actionName)
 
-        val binding2 = GestureBinding(device = 2, button = 1, action = 2, function = 2)
+        val binding2 = GestureBinding(device = 2, button = 1, action = 2, function = OpoConstants.GESTURE_FN_NEXT_TRACK)
         assertEquals("Right Bud", binding2.deviceName)
         assertEquals("Double Tap", binding2.gestureName)
         assertEquals("Next Track", binding2.actionName)
 
-        val binding3 = GestureBinding(device = 1, button = 1, action = 3, function = 5)
+        val binding3 = GestureBinding(device = 1, button = 1, action = 3, function = OpoConstants.GESTURE_FN_CYCLE_ANC)
         assertEquals("Triple Tap", binding3.gestureName)
         assertEquals("Noise Control (ANC)", binding3.actionName)
 
-        val binding4 = GestureBinding(device = 2, button = 1, action = 4, function = 6)
+        val binding4 = GestureBinding(device = 2, button = 1, action = 4, function = OpoConstants.GESTURE_FN_GAME_MODE)
         assertEquals("Touch & Hold", binding4.gestureName)
         assertEquals("Game Mode", binding4.actionName)
 
-        val bindingNone = GestureBinding(device = 1, button = 1, action = 2, function = 0)
+        val bindingNone = GestureBinding(device = 1, button = 1, action = 2, function = OpoConstants.GESTURE_FN_NONE)
         assertEquals("None", bindingNone.actionName)
+
+        val bindingPrev = GestureBinding(device = 1, button = 1, action = 3, function = OpoConstants.GESTURE_FN_PREVIOUS_TRACK)
+        assertEquals("Previous Track", bindingPrev.actionName)
+
+        val bindingVA = GestureBinding(device = 1, button = 1, action = 4, function = OpoConstants.GESTURE_FN_VOICE_ASSISTANT)
+        assertEquals("Voice Assistant", bindingVA.actionName)
+
+        val bindingVolUp = GestureBinding(device = 1, button = 1, action = 2, function = OpoConstants.GESTURE_FN_VOLUME_UP)
+        assertEquals("Volume Up", bindingVolUp.actionName)
+
+        val bindingVolDown = GestureBinding(device = 1, button = 1, action = 2, function = OpoConstants.GESTURE_FN_VOLUME_DOWN)
+        assertEquals("Volume Down", bindingVolDown.actionName)
     }
 
     @Test
@@ -478,9 +491,10 @@ class OpoPacketTest {
         assertEquals(1, frames.size)
 
         val state = OpoFrame.interpret(frames[0], BudsState())
-        assertNotNull(state.fitTestResult)
-        assertTrue(state.fitTestResult!!.contains("Left: Good seal"))
-        assertTrue(state.fitTestResult!!.contains("Right: Poor seal"))
+        assertTrue(state.fitTestState is com.openairbuds.app.model.FitTestState.Completed)
+        val completed = state.fitTestState as com.openairbuds.app.model.FitTestState.Completed
+        assertEquals(com.openairbuds.app.model.FitSealResult.GOOD, completed.left)
+        assertEquals(com.openairbuds.app.model.FitSealResult.POOR, completed.right)
     }
 
     @Test
@@ -491,8 +505,9 @@ class OpoPacketTest {
         assertEquals(1, frames.size)
 
         val state = OpoFrame.interpret(frames[0], BudsState())
-        assertNotNull(state.fitTestResult)
-        assertTrue(state.fitTestResult!!.contains("Left: Average seal"))
+        assertTrue(state.fitTestState is com.openairbuds.app.model.FitTestState.Completed)
+        val completed = state.fitTestState as com.openairbuds.app.model.FitTestState.Completed
+        assertEquals(com.openairbuds.app.model.FitSealResult.AVERAGE, completed.left)
     }
 
     @Test

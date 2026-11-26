@@ -4,12 +4,4 @@
     <string name="tile_anc_off">Normal</string>
     <string name="tile_anc_on">Noise Cancelling</string>
     <string name="tile_anc_transparency">Transparency</string>
-
-    <!-- App Shortcuts (Launcher Long-Press) -->
-    <string name="shortcut_anc_short">Noise Cancelling</string>
-    <string name="shortcut_anc_long">Active Noise Cancellation</string>
-    <string name="shortcut_transparency_short">Transparency</string>
-    <string name="shortcut_transparency_long">Transparency Mode</string>
-    <string name="shortcut_normal_short">Normal</string>
-    <string name="shortcut_normal_long">Normal Mode</string>
 </resources>

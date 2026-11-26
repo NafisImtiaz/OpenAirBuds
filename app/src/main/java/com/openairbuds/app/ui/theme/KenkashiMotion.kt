@@ -1,6 +1,7 @@
 package com.openairbuds.app.ui.theme
 
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
@@ -29,17 +30,27 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * - Physical tactile haptic ticks on toggles and segment selectors
  */
 object KenkashiMotion {
-    const val DurationFast: Int = 180
-    const val DurationMedium: Int = 240
-    const val DurationSlow: Int = 320
+    const val DurationTab: Int = 160
+    const val DurationFast: Int = 200
+    const val DurationMedium: Int = 280
+    const val DurationSlow: Int = 360
 
-    const val EasingA: Float = 0.2f
-    const val EasingB: Float = 0.0f
-    const val EasingC: Float = 0.0f
+    const val EasingA: Float = 0.05f
+    const val EasingB: Float = 0.7f
+    const val EasingC: Float = 0.1f
     const val EasingD: Float = 1.0f
 
-    // Mechanical deceleration curve (fast initial move, instantaneous sharp settle without bouncing)
+    // Smooth fluid mechanical deceleration curve calibrated for 120 FPS persistence
     val MechanicalCubicBezier = CubicBezierEasing(EasingA, EasingB, EasingC, EasingD)
+
+    fun <T> tabTween(
+        durationMillis: Int = DurationTab,
+        delayMillis: Int = 0
+    ): TweenSpec<T> = tween(
+        durationMillis = durationMillis,
+        delayMillis = delayMillis,
+        easing = FastOutSlowInEasing
+    )
 
     fun <T> mechanicalTween(
         durationMillis: Int = DurationMedium,
@@ -89,6 +100,14 @@ object KenkashiMotion {
             else ->
                 listOf(0, 0, 0, 0, 0, 0)
         }
+    }
+
+    /**
+     * Clamps a fractional pager/segment indicator position to [0f, (count - 1).toFloat()].
+     */
+    fun clampIndicatorPosition(page: Int, offsetFraction: Float, count: Int): Float {
+        if (count <= 1) return 0f
+        return (page + offsetFraction).coerceIn(0f, (count - 1).toFloat())
     }
 }
 

@@ -8,7 +8,7 @@ class BudsApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        ModelCatalog.init(this)
+        ModelCatalog.initAsync(this)
     }
 
     companion object {

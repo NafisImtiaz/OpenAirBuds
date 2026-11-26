@@ -1,5 +1,6 @@
 package com.openairbuds.app.model
 
+import androidx.compose.runtime.Immutable
 import com.openairbuds.app.protocol.OpoConstants
 
 enum class NoiseControlMode(val wire: Byte, val displayName: String) {
@@ -37,11 +38,11 @@ enum class NoiseControlMode(val wire: Byte, val displayName: String) {
     }
 }
 
-enum class AncLevel(val wire: Byte, val displayName: String) {
-    HIGH_50DB(OpoConstants.WIRE_ANC_MAX, "Deep (50 dB)"),
-    MODERATE(OpoConstants.WIRE_ANC_MODERATE, "Moderate"),
-    MILD(OpoConstants.WIRE_ANC_MILD, "Mild"),
-    SMART(OpoConstants.WIRE_ANC_SMART, "Smart / Dynamic");
+enum class AncLevel(val wire: Byte, val displayName: String, val shortLabel: String) {
+    HIGH_50DB(OpoConstants.WIRE_ANC_MAX, "Deep (50 dB)", "Max"),
+    MODERATE(OpoConstants.WIRE_ANC_MODERATE, "Moderate", "Moderate"),
+    MILD(OpoConstants.WIRE_ANC_MILD, "Mild", "Mild"),
+    SMART(OpoConstants.WIRE_ANC_SMART, "Smart / Dynamic", "Smart");
 
     companion object {
         fun fromWire(wire: Byte): AncLevel? {
@@ -70,23 +71,21 @@ enum class EqPreset(val slot: Byte, val displayName: String) {
     BASS_BOOST_PLUS(3, "Clear Bass"),
     CUSTOM(4, "Custom1");
 
-    // Maintain backwards compatibility if code is referenced
-    val code: Byte get() = slot
-
     companion object {
         fun fromSlot(slot: Byte): EqPreset {
             return entries.firstOrNull { it.slot == slot } ?: BALANCED
         }
-        fun fromCode(code: Byte): EqPreset = fromSlot(code)
     }
 }
 
+@Immutable
 data class CustomEqProfile(
     val id: Int = 1, // 1, 2, or 3
     val name: String = "Custom1",
     val gains: List<Int> = listOf(0, 0, 0, 0, 0, 0)
 )
 
+@Immutable
 data class BudsBattery(
     val leftPercent: Int? = null,
     val rightPercent: Int? = null,
@@ -98,6 +97,7 @@ data class BudsBattery(
     val isConnected: Boolean get() = leftPercent != null || rightPercent != null
 }
 
+@Immutable
 data class BudsPlacement(
     val isLeftInEar: Boolean = true,
     val isRightInEar: Boolean = true,
@@ -109,12 +109,14 @@ data class BudsPlacement(
     val areBothInEar: Boolean get() = isLeftInEar && isRightInEar
 }
 
+@Immutable
 data class BudsDevice(
     val mac: String,
     val name: String,
     val isConnected: Boolean = false
 )
 
+@Immutable
 data class GestureBinding(
     val device: Byte,       // 1 = Left, 2 = Right, 4 = Both
     val button: Byte,       // Button category (1 = primary physical button, 6 = on call)
@@ -141,20 +143,21 @@ data class GestureBinding(
     }
 
     val actionName: String get() = when (function.toInt()) {
-        0 -> "None"
-        1 -> "Play / Pause"
-        2 -> "Next Track"
-        3 -> "Previous Track"
-        4 -> "Voice Assistant"
-        5 -> "Noise Control (ANC)"
-        6 -> "Game Mode"
-        7 -> "Volume Up"
-        8 -> "Volume Down"
-        9 -> "Switch Devices"
+        0x00 -> "None"
+        0x01 -> "Play / Pause"
+        0x04 -> "Voice Assistant"
+        0x05 -> "Previous Track"
+        0x06 -> "Next Track"
+        0x08 -> "Noise Control (ANC)"
+        0x0B -> "Volume Up"
+        0x0C -> "Volume Down"
+        0x0D -> "Switch Devices"
+        0x11 -> "Game Mode"
         else -> "Action #$function"
     }
 }
 
+@Immutable
 sealed interface ConnectionStatus {
     data object Disconnected : ConnectionStatus
     data object Connecting : ConnectionStatus
@@ -163,6 +166,33 @@ sealed interface ConnectionStatus {
     data class Error(val message: String) : ConnectionStatus
 }
 
+enum class FitSealResult(val wire: Int, val label: String) {
+    GOOD(1, "GOOD SEAL"),
+    AVERAGE(0, "AVERAGE SEAL"),
+    POOR(6, "POOR FIT");
+
+    companion object {
+        fun fromWire(wire: Int): FitSealResult = when (wire) {
+            1 -> GOOD
+            0 -> AVERAGE
+            else -> POOR
+        }
+    }
+}
+
+@Immutable
+sealed interface FitTestState {
+    data object Idle : FitTestState
+    data object Testing : FitTestState
+    data class Completed(val left: FitSealResult?, val right: FitSealResult?) : FitTestState
+    data class Error(val message: String) : FitTestState
+
+    companion object {
+        fun canStart(placement: BudsPlacement): Boolean = placement.areBothInEar
+    }
+}
+
+@Immutable
 data class BudsState(
     val connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected,
     val deviceName: String? = null,
@@ -196,11 +226,10 @@ data class BudsState(
     val isAutoAnswerCallsEnabled: Boolean = false,
     val isFindPhoneEnabled: Boolean = false,
     val isPhoneRingingFromBuds: Boolean = false,
-    val fitTestResult: String? = null,
+    val fitTestState: FitTestState = FitTestState.Idle,
     val isChannelHeldByOtherApp: Boolean = false,
     val isA2dpConnected: Boolean = false
 ) {
-    val isConnected: Boolean get() = connectionStatus is ConnectionStatus.Connected
     val isConnecting: Boolean get() = connectionStatus is ConnectionStatus.Connecting || connectionStatus is ConnectionStatus.Handshaking
 }
 

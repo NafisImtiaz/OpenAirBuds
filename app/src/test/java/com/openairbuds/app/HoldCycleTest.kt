@@ -127,10 +127,10 @@ class HoldCycleTest {
     @Test
     fun testWindNoiseReductionFeatureParsing() {
         // Feature push packet for Wind Noise Reduction:
-        // CMD_FEATURE_PUSH (0x0503), feature 0x0C (FEATURE_WIND_NOISE_REDUCTION), status 0x01 (Enabled)
+        // CMD_FEATURE_PUSH (0x0503), feature 0x1A (FEATURE_WIND_NOISE_REDUCTION), status 0x01 (Enabled)
         val payload = byteArrayOf(
             0x01, // count
-            OpoConstants.FEATURE_WIND_NOISE_REDUCTION, // 0x0C
+            OpoConstants.FEATURE_WIND_NOISE_REDUCTION, // 0x1A
             0x01 // Enabled
         )
         val frame = OpoFrame(

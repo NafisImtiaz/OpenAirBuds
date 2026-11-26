@@ -103,7 +103,8 @@ fun EqualizerScreen(
     onResetCustomEq: () -> Unit,
     modifier: Modifier = Modifier,
     onSelectCustomEqProfile: (Int) -> Unit = {},
-    onAddCustomEqProfile: () -> Boolean = { false }
+    onAddCustomEqProfile: () -> Boolean = { false },
+    onRenameCustomEqProfile: (Int, String) -> Unit = { _, _ -> }
 ) {
     var showCustomEqSheet by remember { mutableStateOf(false) }
 
@@ -123,20 +124,26 @@ fun EqualizerScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
+                    .size(48.dp)
                     .clickable(onClick = onNavigateBack),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.CenterStart
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(16.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             Text(
                 text = "EQ MODE",
@@ -444,6 +451,7 @@ fun EqualizerScreen(
             profileTitle = activeProfile?.name ?: "Custom1",
             onGainChanged = onSetCustomEqBand,
             onReset = onResetCustomEq,
+            onRename = { newName -> activeProfile?.let { onRenameCustomEqProfile(it.id, newName) } },
             onDismiss = { showCustomEqSheet = false }
         )
     }

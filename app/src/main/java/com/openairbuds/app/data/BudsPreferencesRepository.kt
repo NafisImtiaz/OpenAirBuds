@@ -37,7 +37,8 @@ data class BudsPreferences(
 )
 
 class BudsPreferencesRepository(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val context: Context? = null
 ) {
 
     val preferencesFlow: Flow<BudsPreferences> = dataStore.data
@@ -231,6 +232,7 @@ class BudsPreferencesRepository(
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
+        context?.let { setOnboardingCompletedSync(it, completed) }
         dataStore.edit { prefs ->
             prefs[KEY_ONBOARDING_COMPLETED] = completed
         }
@@ -243,6 +245,25 @@ class BudsPreferencesRepository(
     }
 
     companion object {
+        private const val FAST_PREFS_NAME = "buds_fast_prefs"
+        private const val PREF_ONBOARDING_COMPLETED = "onboarding_completed"
+
+        fun isOnboardingCompletedSync(context: Context, isBluetoothGranted: Boolean = false): Boolean {
+            val prefs = context.getSharedPreferences(FAST_PREFS_NAME, Context.MODE_PRIVATE)
+            if (prefs.contains(PREF_ONBOARDING_COMPLETED)) {
+                return prefs.getBoolean(PREF_ONBOARDING_COMPLETED, false)
+            }
+            if (isBluetoothGranted) {
+                prefs.edit().putBoolean(PREF_ONBOARDING_COMPLETED, true).apply()
+                return true
+            }
+            return false
+        }
+
+        fun setOnboardingCompletedSync(context: Context, completed: Boolean) {
+            val prefs = context.getSharedPreferences(FAST_PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putBoolean(PREF_ONBOARDING_COMPLETED, completed).apply()
+        }
         val KEY_LAST_CONNECTED_MAC = stringPreferencesKey("last_connected_mac")
         val KEY_LAST_CONNECTED_NAME = stringPreferencesKey("last_connected_name")
         val KEY_PREFERRED_ANC_LEVEL = stringPreferencesKey("preferred_anc_level")
@@ -268,7 +289,7 @@ class BudsPreferencesRepository(
 
         fun getInstance(context: Context): BudsPreferencesRepository {
             return instance ?: synchronized(this) {
-                instance ?: BudsPreferencesRepository(context.applicationContext.dataStore).also { instance = it }
+                instance ?: BudsPreferencesRepository(context.applicationContext.dataStore, context.applicationContext).also { instance = it }
             }
         }
     }

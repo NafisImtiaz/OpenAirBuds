@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +37,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +59,8 @@ import com.openairbuds.app.ui.theme.KenkashiMotion
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -67,20 +71,20 @@ import androidx.compose.ui.unit.sp
 import com.openairbuds.app.R
 import com.openairbuds.app.model.AncLevel
 import com.openairbuds.app.model.BudsBattery
+import com.openairbuds.app.model.BudsPlacement
 import com.openairbuds.app.model.BudsState
 import com.openairbuds.app.model.ConnectionStatus
 import com.openairbuds.app.model.EqPreset
 import com.openairbuds.app.model.NoiseControlMode
-import com.openairbuds.app.ui.components.CustomEqSheet
 import com.openairbuds.app.ui.components.KenkashiBadge
 import com.openairbuds.app.ui.components.KenkashiDeviceSelector
 import com.openairbuds.app.ui.components.KenkashiDivider
 import com.openairbuds.app.ui.components.KenkashiDynamicBassSheet
-import com.openairbuds.app.ui.components.KenkashiEqualizerSheet
+import com.openairbuds.app.ui.components.KenkashiSectionPanel
 import com.openairbuds.app.ui.components.KenkashiSegmentedBar
-import com.openairbuds.app.ui.components.KenkashiSettingRow
 import com.openairbuds.app.ui.components.KenkashiSwitch
 import com.openairbuds.app.ui.theme.AppThemeMode
+import com.openairbuds.app.ui.theme.kenkashiPressable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,7 +95,6 @@ fun SoundTab(
     onConnect: (BluetoothDevice) -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
-    onRelease: () -> Unit,
     onSetNoiseMode: (NoiseControlMode) -> Unit,
     onSetAncLevel: (AncLevel) -> Unit,
     onToggleWindNoiseReduction: (Boolean) -> Unit,
@@ -100,12 +103,9 @@ fun SoundTab(
     onSetBassWaveLevel: (Int) -> Unit,
     onToggleHiResAudio: (Boolean) -> Unit = {},
     onToggleWear: (Boolean) -> Unit = {},
-    onToggleVolumeEnhancer: (Boolean) -> Unit = {},
     onToggleVoiceEnhance: (Boolean) -> Unit = {},
-    onSetEqPreset: (EqPreset) -> Unit,
-    onSetCustomEqBand: (Int, Int) -> Unit,
-    onResetCustomEq: () -> Unit,
     onOpenEqualizerScreen: () -> Unit = {},
+    onInspectBudControls: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showBassDialog by remember { mutableStateOf(false) }
@@ -171,7 +171,9 @@ fun SoundTab(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        // 1. HERO SECTION (Dynamic theme & design system)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 1. UNIFIED TONAL HARDWARE STAGE (Hero + 0.5dp Divider + Battery Grid)
         val systemDark = isSystemInDarkTheme()
         val isDark = currentTheme.isDark(systemDark)
         val heroArtworkRes = when {
@@ -180,19 +182,31 @@ fun SoundTab(
             else -> R.drawable.ic_kenkashi_hero
         }
 
-        KenkashiHeroSection(
-            artworkRes = heroArtworkRes,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainer, RectangleShape)
+        ) {
+            KenkashiHeroSection(
+                artworkRes = heroArtworkRes,
+                isConnected = isConnected,
+                noiseMode = state.noiseMode,
+                placement = state.placement,
+                onTapBud = { budIndex ->
+                    if (isConnected) onInspectBudControls(budIndex) else onRefresh()
+                },
+                onTapSync = onRefresh,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            KenkashiDivider()
 
-        // 2. KENKASHI HAIRLINE BATTERY GRID (LEFT 84% | RIGHT 86% | CASE 100%)
-        KenkashiBatteryGrid(
-            battery = state.battery,
-            isConnected = isConnected,
-            modifier = Modifier.fillMaxWidth()
-        )
+            KenkashiBatteryGrid(
+                battery = state.battery,
+                isConnected = isConnected,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -212,11 +226,14 @@ fun SoundTab(
             KenkashiNoiseControlSection(
                 currentMode = state.noiseMode,
                 currentLevel = state.ancLevel,
+                supportedLevels = state.deviceProfile.capabilities.supportedAncLevels,
                 isVoiceEnhanceEnabled = state.isVoiceEnhanceEnabled,
+                isWindNoiseReductionEnabled = state.isWindNoiseReductionEnabled,
                 isEnabled = isConnected,
                 onModeSelected = onSetNoiseMode,
                 onLevelSelected = onSetAncLevel,
                 onToggleVoiceEnhance = onToggleVoiceEnhance,
+                onToggleWindNoise = onToggleWindNoiseReduction,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -226,7 +243,6 @@ fun SoundTab(
         KenkashiAudioSettingsList(
             state = state,
             isEnabled = isConnected,
-            onToggleWindNoise = onToggleWindNoiseReduction,
             onToggleBass = onToggleBass,
             onOpenBassDialog = { showBassDialog = true },
             onToggleHiResAudio = onToggleHiResAudio,
@@ -251,28 +267,153 @@ fun SoundTab(
 }
 
 /**
- * Line-art earbuds hero illustration with clean presentation and dynamic theme tinting.
+ * Line-art earbuds hero illustration driven by live BudsState telemetry:
+ * - Dims when disconnected and lets tapping anywhere trigger a sync refresh
+ * - Displays subtle 1dp monochrome acoustic rings when ANC or Transparency is active
+ * - Shows per-bud wear placement (IN EAR / IN CASE / OUT) and jumps to Left/Right Controls on tap
  */
 @Composable
 fun KenkashiHeroSection(
     artworkRes: Int,
+    isConnected: Boolean,
+    noiseMode: NoiseControlMode,
+    placement: BudsPlacement,
+    onTapBud: (Int) -> Unit,
+    onTapSync: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val heroAlpha by animateFloatAsState(
+        targetValue = if (isConnected) 1f else 0.35f,
+        animationSpec = KenkashiMotion.mechanicalTween(KenkashiMotion.DurationMedium),
+        label = "HeroConnectionAlpha"
+    )
+    val ringColor = MaterialTheme.colorScheme.primary
+    val outlineColor = MaterialTheme.colorScheme.outline
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(180.dp)
-            .padding(vertical = 8.dp),
+            .height(186.dp),
         contentAlignment = Alignment.Center
     ) {
+        // Subtle 1dp monochrome acoustic wave indicator behind earbuds when ANC / Transparency active
+        if (isConnected && noiseMode != NoiseControlMode.OFF) {
+            val isTransparency = noiseMode == NoiseControlMode.TRANSPARENCY
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+                val baseRadius = size.minDimension * 0.30f
+                val strokeWidthPx = 1.dp.toPx()
+                val dashEffect = if (isTransparency) {
+                    PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                } else {
+                    null
+                }
+                drawCircle(
+                    color = ringColor.copy(alpha = 0.14f),
+                    radius = baseRadius,
+                    center = center,
+                    style = Stroke(width = strokeWidthPx, pathEffect = dashEffect)
+                )
+                drawCircle(
+                    color = outlineColor.copy(alpha = 0.50f),
+                    radius = baseRadius * 1.38f,
+                    center = center,
+                    style = Stroke(width = strokeWidthPx, pathEffect = dashEffect)
+                )
+            }
+        }
+
+        // Earbuds line-art
         Image(
             painter = painterResource(id = artworkRes),
             contentDescription = "Earbuds Hero",
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .padding(top = 10.dp, bottom = 22.dp)
+                .graphicsLayer { alpha = heroAlpha },
             contentScale = ContentScale.Fit
         )
+
+        // Interactive Left / Case / Right hit zones with mechanical press feedback on buds
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .kenkashiPressable(onClick = { onTapBud(0) })
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1.1f)
+                    .fillMaxHeight()
+                    .then(if (!isConnected) Modifier.clickable(onClick = onTapSync) else Modifier)
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .kenkashiPressable(onClick = { onTapBud(1) })
+            )
+        }
+
+        // Bottom telemetry strip: placement tags when connected, or sync prompt when offline
+        if (isConnected) {
+            val leftLabel = when {
+                placement.isLeftInEar -> "IN EAR"
+                placement.isLeftInCase -> "IN CASE"
+                else -> "OUT"
+            }
+            val rightLabel = when {
+                placement.isRightInEar -> "IN EAR"
+                placement.isRightInCase -> "IN CASE"
+                else -> "OUT"
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = leftLabel,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                    letterSpacing = 0.8.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (noiseMode != NoiseControlMode.OFF) {
+                    Text(
+                        text = if (noiseMode == NoiseControlMode.NOISE_CANCELLATION) "ANC" else "TRANS",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    text = rightLabel,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                    letterSpacing = 0.8.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            Text(
+                text = "DISCONNECTED · TAP TO SYNC",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp)
+            )
+        }
     }
 }
 
@@ -294,7 +435,7 @@ fun KenkashiBatteryGrid(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape),
+            .background(MaterialTheme.colorScheme.surfaceContainer, RectangleShape),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Left Earbud Cell
@@ -386,12 +527,14 @@ fun KenkashiBatteryCell(
                 textAlign = TextAlign.Center
             )
             if (isCharging) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "⚡",
-                    fontSize = 9.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.graphicsLayer { alpha = pulseAlpha }
+                Spacer(modifier = Modifier.width(3.dp))
+                Icon(
+                    imageVector = Icons.Default.Bolt,
+                    contentDescription = "Charging",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(11.dp)
+                        .graphicsLayer { alpha = pulseAlpha }
                 )
             }
         }
@@ -438,17 +581,17 @@ fun KenkashiBatteryCell(
 fun KenkashiNoiseControlSection(
     currentMode: NoiseControlMode,
     currentLevel: AncLevel,
+    supportedLevels: List<AncLevel> = listOf(AncLevel.MILD, AncLevel.MODERATE, AncLevel.HIGH_50DB, AncLevel.SMART),
     isVoiceEnhanceEnabled: Boolean = false,
+    isWindNoiseReductionEnabled: Boolean = false,
     isEnabled: Boolean,
     onModeSelected: (NoiseControlMode) -> Unit,
     onLevelSelected: (AncLevel) -> Unit,
     onToggleVoiceEnhance: (Boolean) -> Unit = {},
+    onToggleWindNoise: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        KenkashiDivider()
-        Spacer(modifier = Modifier.height(16.dp))
-
         Text(
             text = "Sound Control",
             fontFamily = FontFamily.Serif,
@@ -483,34 +626,42 @@ fun KenkashiNoiseControlSection(
         )
 
         // If ANC ON is selected, show sub-segmented level bar: SMART | MAX 50dB | MILD
+        // and Wind Noise Reduction toggle
         AnimatedVisibility(
             visible = currentMode == NoiseControlMode.NOISE_CANCELLATION,
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
             Column(modifier = Modifier.padding(top = 10.dp)) {
-                val levels = listOf("Smart", "Max 50dB", "Mild")
-                val levelIdx = when (currentLevel) {
-                    AncLevel.SMART -> 0
-                    AncLevel.HIGH_50DB -> 1
-                    AncLevel.MILD, AncLevel.MODERATE -> 2
+                if (supportedLevels.size > 1) {
+                    val levels = supportedLevels.map { it.shortLabel }
+                    val levelIdx = supportedLevels.indexOf(currentLevel).let { if (it >= 0) it else 0 }
+
+                    KenkashiSegmentedBar(
+                        options = levels,
+                        selectedIndex = levelIdx,
+                        onSelectIndex = { idx ->
+                            if (isEnabled) {
+                                supportedLevels.getOrNull(idx)?.let(onLevelSelected)
+                            }
+                        },
+                        modifier = Modifier.height(40.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                KenkashiSegmentedBar(
-                    options = levels,
-                    selectedIndex = levelIdx,
-                    onSelectIndex = { idx ->
-                        if (isEnabled) {
-                            val targetLevel = when (idx) {
-                                0 -> AncLevel.SMART
-                                1 -> AncLevel.HIGH_50DB
-                                else -> AncLevel.MILD
-                            }
-                            onLevelSelected(targetLevel)
-                        }
-                    },
-                    modifier = Modifier.height(40.dp)
-                )
+                KenkashiSectionPanel {
+                    KenkashiSettingRow(
+                        title = "Wind Noise Reduction",
+                        subtitle = "Reduce outdoor wind turbulence",
+                        checked = isWindNoiseReductionEnabled,
+                        onCheckedChange = { if (isEnabled) onToggleWindNoise(it) },
+                        enabled = isEnabled,
+                        onClickRow = { if (isEnabled) onToggleWindNoise(!isWindNoiseReductionEnabled) },
+                        showDivider = false
+                    )
+                }
             }
         }
 
@@ -521,13 +672,16 @@ fun KenkashiNoiseControlSection(
             exit = fadeOut() + shrinkVertically()
         ) {
             Column(modifier = Modifier.padding(top = 10.dp)) {
-                KenkashiSettingRow(
-                    title = "Enhance Voices",
-                    subtitle = "Amplify vocal frequencies for clear conversations",
-                    checked = isVoiceEnhanceEnabled,
-                    onCheckedChange = { onToggleVoiceEnhance(it) },
-                    enabled = isEnabled
-                )
+                KenkashiSectionPanel {
+                    KenkashiSettingRow(
+                        title = "Enhance Voices",
+                        subtitle = "Amplify vocal frequencies for clear conversations",
+                        checked = isVoiceEnhanceEnabled,
+                        onCheckedChange = { onToggleVoiceEnhance(it) },
+                        enabled = isEnabled,
+                        showDivider = false
+                    )
+                }
             }
         }
     }
@@ -540,7 +694,6 @@ fun KenkashiNoiseControlSection(
 fun KenkashiAudioSettingsList(
     state: BudsState,
     isEnabled: Boolean,
-    onToggleWindNoise: (Boolean) -> Unit,
     onToggleBass: () -> Unit,
     onOpenBassDialog: () -> Unit,
     onToggleHiResAudio: (Boolean) -> Unit,
@@ -549,69 +702,69 @@ fun KenkashiAudioSettingsList(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        KenkashiDivider()
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Row 1: Wind Noise Reduction
-        KenkashiSettingRow(
-            title = "Wind Noise Reduction",
-            subtitle = "Reduce outdoor wind turbulence",
-            checked = state.isWindNoiseReductionEnabled,
-            onCheckedChange = { if (isEnabled) onToggleWindNoise(it) },
-            enabled = isEnabled,
-            onClickRow = { if (isEnabled) onToggleWindNoise(!state.isWindNoiseReductionEnabled) }
+        Text(
+            text = "Audio",
+            fontFamily = FontFamily.Serif,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onSurface
         )
 
-        // Row 2: Dynamic Bass (previously BassWave)
-        val bassLevelStr = if (state.bassWaveLevel > 0) "+${state.bassWaveLevel}" else "${state.bassWaveLevel}"
-        KenkashiSettingRow(
-            title = "Dynamic Bass",
-            subtitle = if (state.isBassWaveEnabled) "Dynamic Bass active ($bassLevelStr)" else "Deep dynamic bass boost",
-            checked = state.isBassWaveEnabled,
-            onCheckedChange = { if (isEnabled) onToggleBass() },
-            enabled = isEnabled,
-            onClickRow = { if (isEnabled) onOpenBassDialog() }
-        )
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Row 3: Hi-Res Audio (LHDC / LDAC toggle)
-        if (state.deviceProfile.capabilities.hasHiResAudio) {
+        KenkashiSectionPanel {
+            // Row 1: Dynamic Bass (previously BassWave)
+            val bassLevelStr = if (state.bassWaveLevel > 0) "+${state.bassWaveLevel}" else "${state.bassWaveLevel}"
             KenkashiSettingRow(
-                title = "Hi-Res Audio",
-                subtitle = if (state.isHiResAudioEnabled) {
-                    "High-definition ${state.deviceProfile.capabilities.hiResCodec} streaming active"
-                } else {
-                    "Ultra-high definition 24-bit audio streaming"
-                },
-                badgeText = state.deviceProfile.capabilities.hiResCodec,
-                checked = state.isHiResAudioEnabled,
-                onCheckedChange = { if (isEnabled) onToggleHiResAudio(it) },
+                title = "Dynamic Bass",
+                subtitle = if (state.isBassWaveEnabled) "Dynamic Bass active ($bassLevelStr)" else "Deep dynamic bass boost",
+                checked = state.isBassWaveEnabled,
+                onCheckedChange = { if (isEnabled) onToggleBass() },
                 enabled = isEnabled,
-                onClickRow = { if (isEnabled) onToggleHiResAudio(!state.isHiResAudioEnabled) }
+                onClickRow = { if (isEnabled) onOpenBassDialog() }
+            )
+
+            // Row 3: Hi-Res Audio (LHDC / LDAC toggle)
+            if (state.deviceProfile.capabilities.hasHiResAudio) {
+                KenkashiSettingRow(
+                    title = "Hi-Res Audio",
+                    subtitle = if (state.isHiResAudioEnabled) {
+                        "High-definition ${state.deviceProfile.capabilities.hiResCodec} streaming active"
+                    } else {
+                        "Ultra-high definition 24-bit audio streaming"
+                    },
+                    badgeText = state.deviceProfile.capabilities.hiResCodec,
+                    checked = state.isHiResAudioEnabled,
+                    onCheckedChange = { if (isEnabled) onToggleHiResAudio(it) },
+                    enabled = isEnabled,
+                    onClickRow = { if (isEnabled) onToggleHiResAudio(!state.isHiResAudioEnabled) }
+                )
+            }
+
+            // Row 4: In-Ear Detection (moved from ControlsTab)
+            if (state.deviceProfile.capabilities.hasInEarDetection) {
+                KenkashiSettingRow(
+                    title = "In-Ear Detection",
+                    subtitle = "Auto-pause playback when earbuds removed",
+                    checked = state.isInEarDetectionEnabled,
+                    onCheckedChange = { if (isEnabled) onToggleWear(it) },
+                    enabled = isEnabled,
+                    onClickRow = { if (isEnabled) onToggleWear(!state.isInEarDetectionEnabled) }
+                )
+            }
+
+            // Row 5: Equalizer Shortcut & Preset Badge
+            val eqBadge = if (state.eqPreset == EqPreset.CUSTOM) "CUSTOM1" else state.eqPreset.displayName.uppercase()
+            val eqSubtitle = if (state.eqPreset == EqPreset.CUSTOM) "Custom1 active • 6-band curve" else "Sound effects & custom tuning"
+            KenkashiActionRow(
+                title = "Equalizer",
+                subtitle = eqSubtitle,
+                badgeText = eqBadge,
+                onClick = onOpenEqualizerScreen,
+                enabled = isEnabled,
+                showDivider = false
             )
         }
-
-        // Row 4: In-Ear Detection (moved from ControlsTab)
-        if (state.deviceProfile.capabilities.hasInEarDetection) {
-            KenkashiSettingRow(
-                title = "In-Ear Detection",
-                subtitle = "Auto-pause playback when earbuds removed",
-                checked = state.isInEarDetectionEnabled,
-                onCheckedChange = { if (isEnabled) onToggleWear(it) },
-                enabled = isEnabled,
-                onClickRow = { if (isEnabled) onToggleWear(!state.isInEarDetectionEnabled) }
-            )
-        }
-
-        // Row 5: Equalizer Shortcut & Preset Badge
-        val eqBadge = if (state.eqPreset == EqPreset.CUSTOM) "CUSTOM1" else state.eqPreset.displayName.uppercase()
-        val eqSubtitle = if (state.eqPreset == EqPreset.CUSTOM) "Custom1 active • 6-band curve" else "Sound effects & custom tuning"
-        KenkashiActionRow(
-            title = "Equalizer",
-            subtitle = eqSubtitle,
-            badgeText = eqBadge,
-            onClick = onOpenEqualizerScreen,
-            enabled = isEnabled
-        )
     }
 }
 
@@ -627,15 +780,15 @@ fun KenkashiSettingRow(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     badgeText: String? = null,
-    onClickRow: (() -> Unit)? = null
+    onClickRow: (() -> Unit)? = null,
+    showDivider: Boolean = true
 ) {
-    Column(modifier = modifier) {
-        KenkashiDivider()
+    Column(modifier = modifier.alpha(if (enabled) 1f else 0.45f)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (onClickRow != null) Modifier.clickable(onClick = onClickRow) else Modifier)
-                .padding(vertical = 16.dp),
+                .then(if (onClickRow != null) Modifier.clickable(enabled = enabled, onClick = onClickRow) else Modifier)
+                .padding(vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -670,11 +823,14 @@ fun KenkashiSettingRow(
                 enabled = enabled
             )
         }
+        if (showDivider) {
+            KenkashiDivider()
+        }
     }
 }
 
 /**
- * Standard Kenkashi Action Row with Serif Title, Monospace Subtitle, and Badge/Chevron
+ * Standard Kenkashi Action Row with Serif Title, Monospace Subtitle, and Text+Chevron Action
  */
 @Composable
 fun KenkashiActionRow(
@@ -683,15 +839,15 @@ fun KenkashiActionRow(
     badgeText: String,
     onClick: () -> Unit,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showDivider: Boolean = true
 ) {
-    Column(modifier = modifier) {
-        KenkashiDivider()
+    Column(modifier = modifier.alpha(if (enabled) 1f else 0.45f)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = enabled, onClick = onClick)
-                .padding(vertical = 16.dp),
+                .padding(vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -714,16 +870,26 @@ fun KenkashiActionRow(
             Spacer(modifier = Modifier.width(12.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                KenkashiBadge(text = badgeText)
+                Text(
+                    text = badgeText.uppercase(),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        if (showDivider) {
+            KenkashiDivider()
         }
     }
 }

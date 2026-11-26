@@ -306,4 +306,42 @@ class BudsPreferencesTest {
         assertEquals("12:34:56:78:9A:BC", prefs.lastConnectedMac)
         assertEquals("Test Buds", prefs.lastConnectedName)
     }
+
+    @Test
+    fun testShouldShowSetupScreenGate() {
+        // Cold start with onboarding completed and Bluetooth granted: must NOT show setup screen (eliminates cold-start flash)
+        assertFalse(com.openairbuds.app.ui.MainActivity.shouldShowSetup(
+            isOnboardingCompleted = true,
+            isBluetoothGranted = true,
+            showSetupScreen = false
+        ))
+
+        // First launch before granting Bluetooth: must show setup screen
+        assertTrue(com.openairbuds.app.ui.MainActivity.shouldShowSetup(
+            isOnboardingCompleted = false,
+            isBluetoothGranted = false,
+            showSetupScreen = false
+        ))
+
+        // First launch AFTER granting Bluetooth but before clicking Next: MUST STILL SHOW SETUP SCREEN
+        assertTrue(com.openairbuds.app.ui.MainActivity.shouldShowSetup(
+            isOnboardingCompleted = false,
+            isBluetoothGranted = true,
+            showSetupScreen = false
+        ))
+
+        // Explicit setup navigation from Settings: must show setup screen
+        assertTrue(com.openairbuds.app.ui.MainActivity.shouldShowSetup(
+            isOnboardingCompleted = true,
+            isBluetoothGranted = true,
+            showSetupScreen = true
+        ))
+
+        // Permission revoked after onboarding: must show setup screen
+        assertTrue(com.openairbuds.app.ui.MainActivity.shouldShowSetup(
+            isOnboardingCompleted = true,
+            isBluetoothGranted = false,
+            showSetupScreen = false
+        ))
+    }
 }

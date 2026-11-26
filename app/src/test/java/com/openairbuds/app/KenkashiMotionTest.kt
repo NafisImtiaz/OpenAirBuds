@@ -9,14 +9,14 @@ class KenkashiMotionTest {
 
     @Test
     fun testMotionTokenDurationsAndConstants() {
-        assertEquals(180, KenkashiMotion.DurationFast)
-        assertEquals(240, KenkashiMotion.DurationMedium)
-        assertEquals(320, KenkashiMotion.DurationSlow)
+        assertEquals(200, KenkashiMotion.DurationFast)
+        assertEquals(280, KenkashiMotion.DurationMedium)
+        assertEquals(360, KenkashiMotion.DurationSlow)
 
-        // Easing curve control points (mechanical snappy curve)
-        assertEquals(0.2f, KenkashiMotion.EasingA, 0.001f)
-        assertEquals(0.0f, KenkashiMotion.EasingB, 0.001f)
-        assertEquals(0.0f, KenkashiMotion.EasingC, 0.001f)
+        // Easing curve control points (silky fluid mechanical curve for 120 FPS persistence)
+        assertEquals(0.05f, KenkashiMotion.EasingA, 0.001f)
+        assertEquals(0.7f, KenkashiMotion.EasingB, 0.001f)
+        assertEquals(0.1f, KenkashiMotion.EasingC, 0.001f)
         assertEquals(1.0f, KenkashiMotion.EasingD, 0.001f)
 
         // Transform test
@@ -37,7 +37,7 @@ class KenkashiMotionTest {
             durationMillis = KenkashiMotion.DurationFast,
             delayMillis = 50
         )
-        assertEquals(180, customTween.durationMillis)
+        assertEquals(200, customTween.durationMillis)
         assertEquals(50, customTween.delay)
 
         // Spring spec defaults
@@ -108,5 +108,26 @@ class KenkashiMotionTest {
         assertEquals(flat, KenkashiMotion.getPresetCurveGains("Custom"))
         assertEquals(flat, KenkashiMotion.getPresetCurveGains("Rock"))
         assertEquals(flat, KenkashiMotion.getPresetCurveGains(""))
+    }
+
+    @Test
+    fun testClampIndicatorPosition() {
+        assertEquals(0.0f, KenkashiMotion.clampIndicatorPosition(0, 0.0f, 3), 0.001f)
+        assertEquals(0.5f, KenkashiMotion.clampIndicatorPosition(0, 0.5f, 3), 0.001f)
+        assertEquals(1.75f, KenkashiMotion.clampIndicatorPosition(2, -0.25f, 3), 0.001f)
+        // Overscroll clamping
+        assertEquals(0.0f, KenkashiMotion.clampIndicatorPosition(0, -0.4f, 3), 0.001f)
+        assertEquals(2.0f, KenkashiMotion.clampIndicatorPosition(2, 0.4f, 3), 0.001f)
+        // Degenerate count guard
+        assertEquals(0.0f, KenkashiMotion.clampIndicatorPosition(1, 0.5f, 1), 0.001f)
+        assertEquals(0.0f, KenkashiMotion.clampIndicatorPosition(0, 0.0f, 0), 0.001f)
+    }
+
+    @Test
+    fun testTabTweenConstantAndSpec() {
+        assertEquals(160, KenkashiMotion.DurationTab)
+        val tweenSpec = KenkashiMotion.tabTween<Float>()
+        assertEquals(160, tweenSpec.durationMillis)
+        assertEquals(0, tweenSpec.delay)
     }
 }

@@ -29,7 +29,6 @@ object OpoConstants {
     const val CMD_QUERY_DEVICES: Short = 0x0112.toShort()
     const val CMD_QUERY_BASSWAVE: Short = 0x0124.toShort()
     const val CMD_QUERY_BROADCAST: Short = 0x0200.toShort()
-    const val CMD_REGISTER_ONE: Short = 0x0201.toShort()
     const val CMD_ACTIVE_REPORT: Short = 0x0204.toShort()
     const val CMD_REGISTER_NOTIFY: Short = 0x0205.toShort()
 
@@ -45,7 +44,6 @@ object OpoConstants {
     const val CMD_FIT_TEST: Short = 0x0405.toShort()
     const val CMD_SET_EQ: Short = 0x0406.toShort()
     const val CMD_SET_CUSTOM_EQ: Short = 0x0418.toShort()
-    const val CMD_SET_CUSTOM_EQ_REALME: Short = 0x0418.toShort()
     const val CMD_SET_BASSWAVE_LEVEL: Short = 0x041B.toShort()
 
     const val CMD_CLOCK_SYNC_REQ: Short = 0x0500.toShort()
@@ -53,7 +51,6 @@ object OpoConstants {
     const val CMD_EQ_CHANGED: Short = 0x0504.toShort()
 
     // Response Command IDs (Request with bit 15 set)
-    const val CMD_RESP_HANDSHAKE: Short = 0x8100.toShort()
     const val CMD_RESP_PRODUCT_ID: Short = 0x8103.toShort()
     const val CMD_RESP_FIRMWARE: Short = 0x8105.toShort()
     const val CMD_RESP_BATTERY: Short = 0x8106.toShort()
@@ -64,8 +61,6 @@ object OpoConstants {
     const val CMD_RESP_EQ: Short = 0x810F.toShort()
     const val CMD_RESP_DEVICES: Short = 0x8112.toShort()
     const val CMD_RESP_BASSWAVE: Short = 0x8124.toShort()
-    const val CMD_RESP_BROADCAST: Short = 0x8200.toShort()
-    const val CMD_RESP_REGISTER_NOTIFY: Short = 0x8205.toShort()
     const val CMD_CLOCK_SYNC_RESP: Short = 0x8500.toShort()
 
     /**
@@ -84,21 +79,25 @@ object OpoConstants {
     const val FEATURE_IN_EAR_DETECTION: Byte = 0x04
     const val FEATURE_GAME_MODE: Byte = 0x06
     const val FEATURE_ENHANCE_VOICE: Byte = 0x09
-    const val FEATURE_WIND_NOISE_REDUCTION: Byte = 0x0C
+    const val FEATURE_WIND_NOISE_REDUCTION: Byte = 0x1A // 26 in decimal per realme Link protocol
     const val FEATURE_DUAL_CONNECTION: Byte = 0x11
     const val FEATURE_HI_RES_AUDIO: Byte = 0x18
     const val FEATURE_BASSWAVE: Byte = 0x1D
     const val FEATURE_VOLUME_ENHANCER: Byte = 0x1E
 
-    const val GESTURE_FN_SWITCH_DEVICES: Byte = 0x09
-
     /**
-     * Legacy opcodes kept for backwards compatibility.
+     * Hardware Touch Gesture Function Codes (realme Link / BBK firmware protocol).
      */
-    const val OPCODE_STATUS_REPORT: Short = CMD_ACTIVE_REPORT
-    const val PAYLOAD_TYPE_BATTERY: Byte = EVT_BATTERY
-    const val PAYLOAD_TYPE_PLACEMENT: Byte = EVT_WEAR
-    const val PAYLOAD_TYPE_NOISE_MODE: Byte = EVT_ANC
+    const val GESTURE_FN_NONE: Byte = 0x00
+    const val GESTURE_FN_PLAY_PAUSE: Byte = 0x01
+    const val GESTURE_FN_VOICE_ASSISTANT: Byte = 0x04
+    const val GESTURE_FN_PREVIOUS_TRACK: Byte = 0x05
+    const val GESTURE_FN_NEXT_TRACK: Byte = 0x06
+    const val GESTURE_FN_CYCLE_ANC: Byte = 0x08
+    const val GESTURE_FN_VOLUME_UP: Byte = 0x0B
+    const val GESTURE_FN_VOLUME_DOWN: Byte = 0x0C
+    const val GESTURE_FN_SWITCH_DEVICES: Byte = 0x0D
+    const val GESTURE_FN_GAME_MODE: Byte = 0x11
 
     /**
      * Slots for battery & placement.

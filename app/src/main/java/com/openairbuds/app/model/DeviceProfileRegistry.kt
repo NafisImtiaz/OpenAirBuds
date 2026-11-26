@@ -189,6 +189,7 @@ object DeviceProfileRegistry {
         namePatterns = listOf("realme Buds T100", "Buds T100", "realme Buds T110", "Buds T110", "T100", "T110"),
         capabilities = DeviceCapabilities(
             hasAnc = false,
+            supportedAncLevels = emptyList(),
             supportedNoiseModes = emptyList(),
             hasInEarDetection = false,
             hasGameMode = true,

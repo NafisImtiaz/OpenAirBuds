@@ -3,6 +3,10 @@ package com.openairbuds.app.model
 import android.content.Context
 import com.openairbuds.app.BudsApplication
 import com.openairbuds.app.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.InputStream
@@ -15,14 +19,17 @@ data class CatalogModel(
 
 object ModelCatalog {
 
+    private val initLock = Any()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     @Volatile
     private var cache: List<CatalogModel>? = null
 
-    fun isInitialized(): Boolean = cache != null
-
     fun init(jsonString: String) {
         val list = parseJson(jsonString)
-        cache = list
+        synchronized(initLock) {
+            cache = list
+        }
     }
 
     fun init(inputStream: InputStream) {
@@ -31,8 +38,21 @@ object ModelCatalog {
     }
 
     fun init(context: Context) {
-        runCatching {
-            context.assets.open("models.json").use { init(it) }
+        synchronized(initLock) {
+            if (cache != null) return
+            runCatching {
+                context.assets.open("models.json").use { input ->
+                    val content = input.bufferedReader().use { it.readText() }
+                    cache = parseJson(content)
+                }
+            }
+        }
+    }
+
+    fun initAsync(context: Context) {
+        val appContext = context.applicationContext
+        ioScope.launch {
+            init(appContext)
         }
     }
 
@@ -163,6 +183,30 @@ object ModelCatalog {
         val ancModesArray = json.optJSONArray("ancModes")
         val hasAnc = ancModesArray != null && ancModesArray.length() > 0
 
+        val supportedAncLevels = if (!hasAnc) {
+            emptyList()
+        } else {
+            val foundLevels = mutableSetOf<AncLevel>()
+            for (i in 0 until ancModesArray!!.length()) {
+                val entry = ancModesArray.optJSONObject(i) ?: continue
+                if (entry.optInt("mode") == 5) {
+                    val variants = entry.optJSONArray("variants")
+                    if (variants != null) {
+                        for (j in 0 until variants.length()) {
+                            when (variants.optJSONObject(j)?.optInt("mode")) {
+                                3 -> foundLevels.add(AncLevel.MILD)
+                                8 -> foundLevels.add(AncLevel.MODERATE)
+                                4 -> foundLevels.add(AncLevel.HIGH_50DB)
+                                7 -> foundLevels.add(AncLevel.SMART)
+                            }
+                        }
+                    }
+                }
+            }
+            listOf(AncLevel.MILD, AncLevel.MODERATE, AncLevel.HIGH_50DB, AncLevel.SMART)
+                .filter { it in foundLevels }
+        }
+
         val maxAncDb = when {
             !hasAnc -> 0
             name.contains("Air 6", ignoreCase = true) || name.contains("Air6", ignoreCase = true) ||
@@ -235,10 +279,6 @@ object ModelCatalog {
             )
         }
 
-        val isHeroAir6Model = model.id in listOf(
-            "063412", "063012", "060414", "060415", "060814", "068414", "068814", "063812", "063414", "063814", "103412", "103812"
-        ) || squash(name).contains("budsair6")
-
         val codecsArray = json.optJSONArray("codecs")
         val codecsList = mutableListOf<String>()
         if (codecsArray != null) {
@@ -278,6 +318,7 @@ object ModelCatalog {
             capabilities = DeviceCapabilities(
                 hasAnc = hasAnc,
                 maxAncDb = maxAncDb,
+                supportedAncLevels = supportedAncLevels,
                 hasInEarDetection = hasInEarDetection,
                 hasGameMode = hasGameMode,
                 hasDualConnection = hasDualConnection,

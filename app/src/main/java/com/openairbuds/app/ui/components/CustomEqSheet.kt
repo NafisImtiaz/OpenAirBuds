@@ -86,6 +86,7 @@ fun CustomEqSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     profileTitle: String = "Custom1",
+    onRename: (String) -> Unit = {},
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 ) {
     val gains = remember(customGains) {
@@ -134,8 +135,10 @@ fun CustomEqSheet(
                         .background(MaterialTheme.colorScheme.primary, RectangleShape)
                         .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
                         .clickable {
-                            if (tempName.isNotBlank()) {
-                                customTitle = tempName.trim()
+                            val trimmed = tempName.trim()
+                            if (trimmed.isNotEmpty()) {
+                                customTitle = trimmed
+                                onRename(trimmed)
                             }
                             showRenameDialog = false
                         }
@@ -212,7 +215,7 @@ fun CustomEqSheet(
                         )
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
+                                .size(44.dp)
                                 .clickable { showRenameDialog = true },
                             contentAlignment = Alignment.Center
                         ) {
@@ -220,7 +223,7 @@ fun CustomEqSheet(
                                 imageVector = Icons.Outlined.Edit,
                                 contentDescription = "Rename Preset",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -238,12 +241,21 @@ fun CustomEqSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Reset Button
+                    val isFlat = gains.all { it == 0 }
+                    // Reset Button (dimmed & disabled when already flat at 0 dB)
                     Box(
                         modifier = Modifier
-                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .clickable(onClick = onReset)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .height(36.dp)
+                            .border(
+                                BorderStroke(
+                                    1.dp,
+                                    if (isFlat) MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                    else MaterialTheme.colorScheme.outline
+                                ),
+                                RectangleShape
+                            )
+                            .then(if (!isFlat) Modifier.clickable(onClick = onReset) else Modifier)
+                            .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -252,23 +264,24 @@ fun CustomEqSheet(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (isFlat) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            else MaterialTheme.colorScheme.onSurface
                         )
                     }
 
                     // Close Button
                     Box(
                         modifier = Modifier
+                            .size(36.dp)
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
-                            .clickable(onClick = onDismiss)
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .clickable(onClick = onDismiss),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
                             tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }

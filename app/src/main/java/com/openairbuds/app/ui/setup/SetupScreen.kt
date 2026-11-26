@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Notifications
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openairbuds.app.ui.components.KenkashiDivider
+import com.openairbuds.app.ui.theme.kenkashiSuccessColor
 
 /**
  * Kenkashi Onboarding & Permissions Landing Screen:
@@ -81,19 +83,25 @@ fun SetupScreen(
             if (canDismiss) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape)
+                        .size(48.dp)
                         .clickable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RectangleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
             }
 
             Text(
@@ -241,19 +249,33 @@ fun SetupScreen(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (isBluetoothGranted) {
-                        if (canDismiss) "DONE" else "CONTINUE TO APP"
-                    } else {
-                        "GRANT BLUETOOTH ACCESS"
-                    },
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    color = if (isBluetoothGranted) MaterialTheme.colorScheme.surface
-                    else MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = if (isBluetoothGranted) {
+                            if (canDismiss) "DONE" else "NEXT"
+                        } else {
+                            "GRANT BLUETOOTH ACCESS"
+                        },
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        color = if (isBluetoothGranted) MaterialTheme.colorScheme.surface
+                        else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isBluetoothGranted && !canDismiss) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Next",
+                            tint = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -300,6 +322,7 @@ private fun PermissionCard(
                 }
 
                 if (isGranted) {
+                    val successColor = kenkashiSuccessColor()
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -307,7 +330,7 @@ private fun PermissionCard(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Granted",
-                            tint = Color(0xFF2E7D32),
+                            tint = successColor,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
@@ -315,7 +338,7 @@ private fun PermissionCard(
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
+                            color = successColor
                         )
                     }
                 }

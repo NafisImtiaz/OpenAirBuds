@@ -1,5 +1,6 @@
 package com.openairbuds.app
 
+import com.openairbuds.app.model.AncLevel
 import com.openairbuds.app.model.CatalogModel
 import com.openairbuds.app.model.DeviceProfileRegistry
 import com.openairbuds.app.model.EarbudBrand
@@ -132,5 +133,32 @@ class ModelCatalogTest {
         assertTrue("Buds Air 6 Pro MUST have Dual Connection", air6Pro.capabilities.hasDualConnection)
         assertTrue("Buds Air 6 Pro supports Hi-Res Audio", air6Pro.capabilities.hasHiResAudio)
         assertEquals("LDAC", air6Pro.capabilities.hiResCodec)
+    }
+
+    @Test
+    fun testDynamicAncLevelsDerivation() {
+        // realme Buds Air 6 (063412) -> all 4 modes: Mild, Moderate, Max, Smart
+        val air6 = DeviceProfileRegistry.resolve("063412", "realme Buds Air 6")
+        assertEquals(
+            listOf(AncLevel.MILD, AncLevel.MODERATE, AncLevel.HIGH_50DB, AncLevel.SMART),
+            air6.capabilities.supportedAncLevels
+        )
+
+        // realme Buds T310 (063C12) -> 3 modes: Mild, Moderate, Max (no Smart)
+        val t310 = ModelCatalog.toDeviceProfile(ModelCatalog.find("063C12", null)!!)
+        assertEquals(
+            listOf(AncLevel.MILD, AncLevel.MODERATE, AncLevel.HIGH_50DB),
+            t310.capabilities.supportedAncLevels
+        )
+
+        // OPPO Enco Free2i (064010) -> single-depth ANC (no variants)
+        val free2i = ModelCatalog.toDeviceProfile(ModelCatalog.find("064010", null)!!)
+        assertTrue(free2i.capabilities.hasAnc)
+        assertTrue(free2i.capabilities.supportedAncLevels.isEmpty())
+
+        // OnePlus Bullets Wireless Z2 (050414) -> no ANC
+        val bwZ2 = ModelCatalog.toDeviceProfile(ModelCatalog.find("050414", null)!!)
+        assertFalse(bwZ2.capabilities.hasAnc)
+        assertTrue(bwZ2.capabilities.supportedAncLevels.isEmpty())
     }
 }

@@ -14,6 +14,8 @@ import com.openairbuds.app.model.ConnectionStatus
 import com.openairbuds.app.model.EqPreset
 import com.openairbuds.app.model.GestureBinding
 import com.openairbuds.app.model.NoiseControlMode
+import com.openairbuds.app.protocol.OpoConstants
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -75,26 +77,30 @@ class BudsViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshPairedDevices() {
-        val devices = bluetoothManager.getPairedDevices()
-        _pairedDevices.value = devices
+        viewModelScope.launch(Dispatchers.IO) {
+            val devices = bluetoothManager.getPairedDevices()
+            if (_pairedDevices.value != devices) {
+                _pairedDevices.value = devices
+            }
 
-        val currentStatus = budsState.value.connectionStatus
-        val isBusyConnecting = currentStatus is ConnectionStatus.Connecting || currentStatus is ConnectionStatus.Handshaking
-        if (isBusyConnecting) return
+            val currentStatus = budsState.value.connectionStatus
+            val isBusyConnecting = currentStatus is ConnectionStatus.Connecting || currentStatus is ConnectionStatus.Handshaking
+            if (isBusyConnecting) return@launch
 
-        val prefs = preferences.value
-        if (shouldTriggerAutoConnect(
-                autoConnectEnabled = prefs.autoConnectEnabled,
-                userInitiatedDisconnect = userInitiatedDisconnect,
-                isA2dpConnected = budsState.value.isA2dpConnected,
-                connectionStatus = currentStatus
-            )
-        ) {
-            val connectedA2dp = bluetoothManager.getConnectedA2dpDevices()
-            val candidate = findCandidateDevice(devices, prefs.lastConnectedMac, connectedA2dp)
-            if (candidate != null && budsState.value.connectionStatus is ConnectionStatus.Disconnected) {
-                Log.i("BudsViewModel", "Refreshing and auto-connecting to: ${candidate.name} [${candidate.address}]")
-                connect(candidate)
+            val prefs = preferences.value
+            if (shouldTriggerAutoConnect(
+                    autoConnectEnabled = prefs.autoConnectEnabled,
+                    userInitiatedDisconnect = userInitiatedDisconnect,
+                    isA2dpConnected = budsState.value.isA2dpConnected,
+                    connectionStatus = currentStatus
+                )
+            ) {
+                val connectedA2dp = bluetoothManager.getConnectedA2dpDevices()
+                val candidate = findCandidateDevice(devices, prefs.lastConnectedMac, connectedA2dp)
+                if (candidate != null && budsState.value.connectionStatus is ConnectionStatus.Disconnected) {
+                    Log.i("BudsViewModel", "Refreshing and auto-connecting to: ${candidate.name} [${candidate.address}]")
+                    connect(candidate)
+                }
             }
         }
     }
@@ -109,11 +115,6 @@ class BudsViewModel(application: Application) : AndroidViewModel(application) {
         }
         userInitiatedDisconnect = false
         bluetoothManager.connectToDevice(device)
-    }
-
-    fun disconnect() {
-        userInitiatedDisconnect = true
-        bluetoothManager.disconnect()
     }
 
     fun releaseForRealmeLink() {
@@ -161,10 +162,6 @@ class BudsViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setCustomEq(gains: List<Int>) {
-        bluetoothManager.setCustomEq(gains)
-    }
-
     fun resetCustomEq() {
         bluetoothManager.setCustomEq(listOf(0, 0, 0, 0, 0, 0))
     }
@@ -177,12 +174,12 @@ class BudsViewModel(application: Application) : AndroidViewModel(application) {
         return bluetoothManager.addCustomEqProfile()
     }
 
-    fun setHiResAudio(enabled: Boolean) {
-        bluetoothManager.setHiResAudio(enabled)
+    fun renameCustomEqProfile(profileId: Int, newName: String) {
+        bluetoothManager.renameCustomEqProfile(profileId, newName)
     }
 
-    fun setVolumeEnhancer(enabled: Boolean) {
-        bluetoothManager.setVolumeEnhancer(enabled)
+    fun setHiResAudio(enabled: Boolean) {
+        bluetoothManager.setHiResAudio(enabled)
     }
 
     fun setWindNoiseReduction(enabled: Boolean) {
@@ -224,14 +221,14 @@ class BudsViewModel(application: Application) : AndroidViewModel(application) {
     fun setGestureBinding(device: Byte, button: Byte, action: Byte, function: Byte) {
         val current = budsState.value.gestureBindings
         val defaultList = if (current.isNotEmpty()) current else listOf(
-            GestureBinding(device = 1, button = 1, action = 1, function = 0),
-            GestureBinding(device = 1, button = 1, action = 2, function = 1),
-            GestureBinding(device = 1, button = 1, action = 3, function = 2),
-            GestureBinding(device = 1, button = 1, action = 4, function = 5),
-            GestureBinding(device = 2, button = 1, action = 1, function = 0),
-            GestureBinding(device = 2, button = 1, action = 2, function = 1),
-            GestureBinding(device = 2, button = 1, action = 3, function = 3),
-            GestureBinding(device = 2, button = 1, action = 4, function = 5)
+            GestureBinding(device = 1, button = 1, action = 1, function = OpoConstants.GESTURE_FN_PLAY_PAUSE),
+            GestureBinding(device = 1, button = 1, action = 2, function = OpoConstants.GESTURE_FN_NEXT_TRACK),
+            GestureBinding(device = 1, button = 1, action = 3, function = OpoConstants.GESTURE_FN_PREVIOUS_TRACK),
+            GestureBinding(device = 1, button = 1, action = 4, function = OpoConstants.GESTURE_FN_CYCLE_ANC),
+            GestureBinding(device = 2, button = 1, action = 1, function = OpoConstants.GESTURE_FN_PLAY_PAUSE),
+            GestureBinding(device = 2, button = 1, action = 2, function = OpoConstants.GESTURE_FN_NEXT_TRACK),
+            GestureBinding(device = 2, button = 1, action = 3, function = OpoConstants.GESTURE_FN_PREVIOUS_TRACK),
+            GestureBinding(device = 2, button = 1, action = 4, function = OpoConstants.GESTURE_FN_CYCLE_ANC)
         )
         val updated = defaultList.map {
             if (it.device == device && it.action == action) {
@@ -246,22 +243,20 @@ class BudsViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun retryConnection() {
-        var devices = _pairedDevices.value
-        if (devices.isEmpty()) {
-            devices = bluetoothManager.getPairedDevices()
-            _pairedDevices.value = devices
-        }
-        val connectedA2dp = bluetoothManager.getConnectedA2dpDevices()
-        val targetMac = budsState.value.deviceAddress ?: preferences.value.lastConnectedMac
-        val device = findCandidateDevice(devices, targetMac, connectedA2dp) ?: devices.firstOrNull()
-        if (device != null) {
-            connect(device)
-        }
-    }
-
-    fun setAutoConnectEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            preferencesRepository.setAutoConnectEnabled(enabled)
+        viewModelScope.launch(Dispatchers.IO) {
+            var devices = _pairedDevices.value
+            if (devices.isEmpty()) {
+                devices = bluetoothManager.getPairedDevices()
+                if (_pairedDevices.value != devices) {
+                    _pairedDevices.value = devices
+                }
+            }
+            val connectedA2dp = bluetoothManager.getConnectedA2dpDevices()
+            val targetMac = budsState.value.deviceAddress ?: preferences.value.lastConnectedMac
+            val device = findCandidateDevice(devices, targetMac, connectedA2dp) ?: devices.firstOrNull()
+            if (device != null) {
+                connect(device)
+            }
         }
     }
 

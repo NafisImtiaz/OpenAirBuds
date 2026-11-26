@@ -15,13 +15,6 @@ data class OpoFrame(
     val sequence: Byte,
     val payload: ByteArray
 ) {
-    val opcode: Short get() = cmdId
-    val cmdInt: Int get() = cmdId.toInt() and 0xFFFF
-
-    // Backward-compatible properties
-    val category: Byte get() = (cmdId.toInt() and 0xFF).toByte()
-    val subcommand: Byte get() = ((cmdId.toInt() ushr 8) and 0xFF).toByte()
-
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -620,28 +613,30 @@ data class OpoFrame(
                         }
 
                         OpoConstants.EVT_FIT_TEST -> {
-                            val results = mutableListOf<String>()
+                            var left: com.openairbuds.app.model.FitSealResult? = null
+                            var right: com.openairbuds.app.model.FitSealResult? = null
+                            var hasAnyResult = false
                             var idx = 1
                             while (idx + 1 < payload.size) {
                                 val dev = payload[idx].toInt() and 0xFF
                                 val res = payload[idx + 1].toInt() and 0xFF
-                                // Protocol mapping matching QuickBuds: 1 = Good seal, 0 = Average seal, 6 = Poor seal
-                                val desc = when (res) {
-                                    1 -> "Good seal"
-                                    0 -> "Average seal"
-                                    6 -> "Poor seal, adjust earbud"
-                                    else -> "Adjust earbud"
+                                val seal = com.openairbuds.app.model.FitSealResult.fromWire(res)
+                                when (dev) {
+                                    1 -> {
+                                        left = seal
+                                        hasAnyResult = true
+                                    }
+                                    2 -> {
+                                        right = seal
+                                        hasAnyResult = true
+                                    }
                                 }
-                                val devStr = when (dev) {
-                                    1 -> "Left"
-                                    2 -> "Right"
-                                    else -> "Bud #$dev"
-                                }
-                                results.add("$devStr: $desc")
                                 idx += 2
                             }
-                            if (results.isNotEmpty()) {
-                                updatedState = updatedState.copy(fitTestResult = results.joinToString(", "))
+                            if (hasAnyResult) {
+                                updatedState = updatedState.copy(
+                                    fitTestState = com.openairbuds.app.model.FitTestState.Completed(left, right)
+                                )
                             }
                         }
 
